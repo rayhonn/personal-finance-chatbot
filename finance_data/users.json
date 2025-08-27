@@ -1,0 +1,17 @@
+{
+    "john@gmail.com": {
+        "name": "John",
+        "password": "68482803aaba8275b96565b25ecabcdc475b21b08b7ff09e018f9e798a5b9bda",
+        "joined_date": "2025-08-27 21:26:09"
+    },
+    "alice@gmail.com": {
+        "name": "Alice",
+        "password": "72db16a30e6c4104011fc3157061ecbfdf86482952969f9fc30a0116f5e72abf",
+        "joined_date": "2025-08-27 21:58:51"
+    },
+    "jane@gmail.com": {
+        "name": "Jane",
+        "password": "f3f197f8dddc37d3a4311035c50ace9a35a0e3595153a1a47e72c58ecaccfcd3",
+        "joined_date": "2025-08-27 23:30:13"
+    }
+}
