@@ -1,224 +1,217 @@
 {
-  "intents": [
-    {
-      "tag": "greeting",
-      "patterns": [
-        "hi",
-        "hello",
-        "hey",
-        "good morning",
-        "good afternoon",
-        "good evening",
-        "howdy",
-        "greetings",
-        "what's up",
-        "how are you"
-      ],
-      "responses": [
-        "Hello! How can I help with your finances today?",
-        "Hi there! Ready to manage your money?",
-        "Welcome back! What would you like to track today?",
-        "Hello! Let's keep your finances on track. What can I help with?",
-        "Hi! I'm here to help you manage your money. What would you like to do today?"
-      ]
-    },
-    {
-      "tag": "expense_add",
-      "patterns": [
-        "spent money on",
-        "i spent",
-        "i paid",
-        "bought",
-        "purchased",
-        "add expense",
-        "record expense",
-        "log expense",
-        "track spending",
-        "paid for",
-        "cost me",
-        "for lunch",
-        "for dinner",
-        "for food",
-        "on groceries",
-        "on transport",
-        "on shopping"
-      ],
-      "responses": [
-        "I've recorded your expense: RM{amount:.2f} for {description} in the '{category}' category. Is that the right category?",
-        "Added RM{amount:.2f} spent on {description} to your '{category}' expenses. Is that the right category for this expense?",
-        "Got it! RM{amount:.2f} for {description} has been recorded as '{category}'. Is that the correct category?"
-      ]
-    },
-    {
-      "tag": "category_confirmation",
-      "patterns": [
-        "yes", "yeah", "correct", "that's right", "right", "y",
-        "no", "nope", "incorrect", "wrong", "n", "change category", "change it"
-      ],
-      "responses": [
-        "Great! Your expense has been recorded successfully.",
-        "Perfect! I've saved your expense with that category.",
-        "I've updated your expense with the new category. What would you like to do next?",
-        "Category has been updated. Is there anything else you'd like to do?"
-      ]
-    },
-    {
-      "tag": "expense_query",
-      "patterns": [
-        "show expenses",
-        "view expenses",
-        "list expenses",
-        "my spending",
-        "expense history",
-        "spending history",
-        "what did i spend",
-        "show me my expenses",
-        "recent expenses"
-      ],
-      "responses": [
-        "Here are your recent expenses:\n\n{expenses}\n\nWould you like to see expenses for a specific time period or category?"
-      ]
-    },
-    {
-      "tag": "budget_set",
-      "patterns": [
-        "set budget",
-        "create budget",
-        "make budget",
-        "new budget",
-        "establish budget",
-        "budget limit",
-        "spending limit",
-        "allocate budget"
-      ],
-      "responses": [
-        "I'd be happy to help you set a budget. What category would you like to budget for, and how much would you like to allocate? For example, 'Set a RM500 budget for food this month'."
-      ]
-    },
-    {
-      "tag": "budget_query",
-      "patterns": [
-        "how's my budget",
-        "budget status",
-        "budget progress",
-        "am i over budget",
-        "budget overview",
-        "check budget",
-        "show budget",
-        "view budget"
-      ],
-      "responses": [
-        "Here's your budget overview for {month} {year}:\n\n{budgets}\n\nWould you like to adjust any of your budgets?"
-      ]
-    },
-    {
-      "tag": "spending_summary",
-      "patterns": [
-        "spending summary",
-        "expense summary",
-        "summarize spending",
-        "monthly summary",
-        "spending overview",
-        "spending analysis",
-        "where did my money go",
-        "expense breakdown"
-      ],
-      "responses": [
-        "Here's your spending summary for {month} {year}:\n\n{spending}\n\nTotal spending: RM{total:.2f}"
-      ]
-    },
-    {
-      "tag": "savings_advice",
-      "patterns": [
-        "how to save",
-        "saving tips",
-        "save money",
-        "reduce spending",
-        "financial advice",
-        "budget tips",
-        "spending advice",
-        "money saving ideas",
-        "cut expenses"
-      ],
-      "responses": [
-        "Looking at your spending, I notice that '{highest_category}' is your highest expense category. Here are some tips to reduce spending in this area:\n\n{tips}\n\nWould you like more specific savings advice for a different category?",
-        "Based on your spending habits, I see that you spend the most on '{highest_category}'. To save money, you could:\n\n{tips}\n\nWould you like more specific savings advice for a different category?"
-      ]
-    },
-    {
-      "tag": "daily_prompt",
-      "patterns": [
-        "spending today",
-        "expenses today",
-        "daily log",
-        "today's spending",
-        "did i spend today",
-        "today's expenses"
-      ],
-      "responses": [
-        "Any spending today? I'm here to help you track your expenses.",
-        "Have you made any purchases today that you'd like to record?",
-        "Don't forget to log today's expenses! What have you spent money on today?",
-        "Time for your daily finance check-in! Any expenses to record today?"
-      ]
-    },
-    {
-      "tag": "help",
-      "patterns": [
-        "help",
-        "guide",
-        "instructions",
-        "how to use",
-        "features",
-        "what can you do",
-        "capabilities",
-        "commands",
-        "how does this work"
-      ],
-      "responses": [
-        "I'm your personal finance assistant! Here's what I can help you with:\n\n• **Record Expenses**: Tell me what you spent money on (e.g., \"I spent RM25 on lunch\")\n• **Track Budgets**: Set budgets for different categories and check your progress\n• **View Spending**: Get summaries of your spending by category or time period\n• **Savings Advice**: Get personalized tips on how to save money\n• **Daily Tracking**: Log your daily expenses to build better financial habits\n\nTry asking me things like:\n- \"I spent RM45 on groceries\"\n- \"Show me my recent expenses\"\n- \"Set a RM500 budget for food\"\n- \"How am I doing on my budget?\"\n- \"What's my spending summary for this month?\"\n- \"How can I save money?\""
-      ]
-    },
-    {
-      "tag": "thanks",
-      "patterns": [
-        "thank you",
-        "thanks",
-        "appreciate it",
-        "thank you so much",
-        "thanks a lot",
-        "great job"
-      ],
-      "responses": [
-        "You're welcome! Is there anything else I can help you with?",
-        "Happy to help! Let me know if you need anything else.",
-        "My pleasure! Feel free to ask if you have other finance questions.",
-        "You're welcome! Building good financial habits takes time, and I'm here to help."
-      ]
-    },
-    {
-      "tag": "category_info",
-      "patterns": [
-        "what categories",
-        "expense categories",
-        "types of expenses",
-        "available categories",
-        "list categories",
-        "show categories"
-      ],
-      "responses": [
-        "I can categorize your expenses as: Food, Transport, Entertainment, Shopping, Utilities, Housing, Healthcare, Education, or Other. Which would you like to use?",
-        "Here are the expense categories I support: Food, Transport, Entertainment, Shopping, Utilities, Housing, Healthcare, Education, and Other. Would you like to categorize an expense?"
-      ]
-    },
-    {
-      "tag": "fallback",
-      "patterns": [],
-      "responses": [
-        "I'm your personal finance assistant. You can ask me to record expenses, check your budget, provide spending summaries, or offer savings advice. Type 'help' to see all the things I can do!",
-        "I didn't quite catch that. I can help you track expenses, set budgets, and provide financial insights. Try 'help' to see what I can do.",
-        "Sorry, I'm not sure what you're asking. I'm designed to help with personal finance tasks like expense tracking and budgeting. Type 'help' for more information."
-      ]
-    }
-  ]
+    "intents": [
+        {
+            "tag": "greeting",
+            "patterns": [
+                "hi",
+                "hello",
+                "hey",
+                "good morning",
+                "good afternoon",
+                "good evening",
+                "howdy",
+                "greetings",
+                "what's up",
+                "how are you"
+            ],
+            "responses": [
+                "Hello! How can I help with your finances today?",
+                "Hi there! Ready to manage your money?",
+                "Welcome back! What would you like to track today?",
+                "Hello! Let's keep your finances on track. What can I help with?",
+                "Hi! I'm here to help you manage your money. What would you like to do today?"
+            ]
+        },
+        {
+            "tag": "expense_add",
+            "patterns": [
+                "spent money on",
+                "i spent",
+                "spent",
+                "spend",
+                "i paid",
+                "buy",
+                "bought",
+                "RM",
+                "purchased",
+                "add expense",
+                "record expense",
+                "log expense",
+                "track spending",
+                "paid for",
+                "cost me",
+                "cost",
+                "for lunch",
+                "for dinner",
+                "for food",
+                "on groceries",
+                "take",
+                "on transport",
+                "on shopping"
+            ],
+            "responses": [
+                "I've recorded your expense: RM{amount:.2f} for {description} in the '{category}' category. Is that the right category?",
+                "Added RM{amount:.2f} spent on {description} to your '{category}' expenses. Is that the right category for this expense?",
+                "Got it! RM{amount:.2f} for {description} has been recorded as '{category}'. Is that the correct category?"
+            ]
+        },
+        {
+            "tag": "expense_query",
+            "patterns": [
+                "show expenses",
+                "view expenses",
+                "list expenses",
+                "my spending",
+                "expense history",
+                "spending history",
+                "what did i spend",
+                "show me my expenses",
+                "recent expenses"
+            ],
+            "responses": [
+                "Here are your recent expenses:\n\n{expenses}\n\nWould you like to see expenses for a specific time period or category?"
+            ]
+        },
+        {
+            "tag": "budget_set",
+            "patterns": [
+                "set budget",
+                "create budget",
+                "make budget",
+                "new budget",
+                "establish budget",
+                "budget limit",
+                "spending limit",
+                "allocate budget"
+            ],
+            "responses": [
+                "I'd be happy to help you set a budget. What category would you like to budget for, and how much would you like to allocate? For example, 'Set a RM500 budget for food this month'."
+            ]
+        },
+        {
+            "tag": "budget_query",
+            "patterns": [
+                "how's my budget",
+                "budget status",
+                "budget progress",
+                "am i over budget",
+                "budget overview",
+                "check budget",
+                "show budget",
+                "view budget"
+            ],
+            "responses": [
+                "Here's your budget overview for {month} {year}:\n\n{budgets}\n\nWould you like to adjust any of your budgets?"
+            ]
+        },
+        {
+            "tag": "spending_summary",
+            "patterns": [
+                "spending summary",
+                "expense summary",
+                "summarize spending",
+                "monthly summary",
+                "spending overview",
+                "spending analysis",
+                "where did my money go",
+                "expense breakdown"
+            ],
+            "responses": [
+                "Here's your spending summary for {month} {year}:\n\n{spending}\n\nTotal spending: RM{total:.2f}"
+            ]
+        },
+        {
+            "tag": "savings_advice",
+            "patterns": [
+                "how to save",
+                "saving tips",
+                "save money",
+                "reduce spending",
+                "financial advice",
+                "budget tips",
+                "spending advice",
+                "money saving ideas",
+                "cut expenses"
+            ],
+            "responses": [
+                "Looking at your spending, I notice that '{highest_category}' is your highest expense category. Here are some tips to reduce spending in this area:\n\n{tips}\n\nWould you like more specific savings advice for a different category?",
+                "Based on your spending habits, I see that you spend the most on '{highest_category}'. To save money, you could:\n\n{tips}\n\nWould you like more specific savings advice for a different category?"
+            ]
+        },
+        {
+            "tag": "daily_prompt",
+            "patterns": [
+                "spending today",
+                "expenses today",
+                "daily log",
+                "today's spending",
+                "did i spend today",
+                "today's expenses"
+            ],
+            "responses": [
+                "Any spending today? I'm here to help you track your expenses.",
+                "Have you made any purchases today that you'd like to record?",
+                "Don't forget to log today's expenses! What have you spent money on today?",
+                "Time for your daily finance check-in! Any expenses to record today?"
+            ]
+        },
+        {
+            "tag": "help",
+            "patterns": [
+                "help",
+                "guide",
+                "instructions",
+                "how to use",
+                "features",
+                "what can you do",
+                "capabilities",
+                "commands",
+                "how does this work"
+            ],
+            "responses": [
+              "# 💰 Finance Assistant Help Guide\n\nI'm your personal finance chatbot, here to help you manage your money effectively!\n\n## 📝 Core Features\n\n### 🧾 Track Expenses\n* Record daily spending: \"I spent RM25 on lunch\"\n* Add details: \"Paid RM80 for dinner with friends\"\n* Quick logging: \"RM15 coffee\"\n\n### 📊 View Your Spending\n* Recent history: \"Show my recent expenses\"\n* Category breakdown: \"What did I spend on food?\"\n* Time periods: \"Show my spending for July\"\n* Summary: \"Give me a spending summary\"\n\n### 💼 Budget Management\n* Set budgets: \"Set a RM500 budget for food\"\n* Check status: \"How am I doing on my budget?\"\n* Budget advice: \"Am I overspending?\"\n\n### 💡 Financial Insights\n* Savings tips: \"How can I save money?\"\n* Category advice: \"Help me reduce food expenses\"\n* Spending patterns: \"Where am I spending the most?\"\n\n## 🚀 Quick Examples\n1. \"I spent RM45 on groceries yesterday\"\n2. \"Show my expenses for this month\"\n3. \"Set a monthly budget of RM200 for entertainment\"\n4. \"How much have I spent on shopping?\"\n5. \"Give me tips to save on transportation\"\n\n---\n\nType any of these commands to get started, or ask me questions about your finances in natural language! 🌟"
+            ] 
+        },
+        {
+            "tag": "thanks",
+            "patterns": [
+                "thank you",
+                "thanks",
+                "appreciate it",
+                "thank you so much",
+                "thanks a lot",
+                "great job"
+            ],
+            "responses": [
+                "You're welcome! Is there anything else I can help you with?",
+                "Happy to help! Let me know if you need anything else.",
+                "My pleasure! Feel free to ask if you have other finance questions.",
+                "You're welcome! Building good financial habits takes time, and I'm here to help."
+            ]
+        },
+        {
+            "tag": "category_info",
+            "patterns": [
+                "what categories",
+                "expense categories",
+                "types of expenses",
+                "available categories",
+                "list categories",
+                "show categories"
+            ],
+            "responses": [
+                "I can categorize your expenses as: Food, Transport, Entertainment, Shopping, Utilities, Housing, Healthcare, Education, or Other. Which would you like to use?",
+                "Here are the expense categories I support: Food, Transport, Entertainment, Shopping, Utilities, Housing, Healthcare, Education, and Other. Would you like to categorize an expense?"
+            ]
+        },
+        {
+            "tag": "fallback",
+            "patterns": [],
+            "responses": [
+                "I'm your personal finance assistant. You can ask me to record expenses, check your budget, provide spending summaries, or offer savings advice. Type 'help' to see all the things I can do!",
+                "I didn't quite catch that. I can help you track expenses, set budgets, and provide financial insights. Try 'help' to see what I can do.",
+                "Sorry, I'm not sure what you're asking. I'm designed to help with personal finance tasks like expense tracking and budgeting. Type 'help' for more information."
+            ]
+        }
+    ]
 }
