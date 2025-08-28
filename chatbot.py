@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 import random
 
 # Set page configuration
-st.set_page_config(page_title="Personal Finance Chatbot", page_icon="📊ll")
+st.set_page_config(page_title="Personal Finance Chatbot", page_icon="📊")
 
 # Try to import NLTK components
 try:
