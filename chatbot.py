@@ -14,6 +14,7 @@ import random
 # Set page configuration
 st.set_page_config(page_title="Personal Finance Chatbot", page_icon="📊")
 
+# -------------------------- necessary imports --------------------------
 # Try to import NLTK components
 try:
     import nltk
@@ -79,7 +80,7 @@ def clean_up_sentence(sentence):
     sentence_words = [lemmatize_word(word) for word in sentence_words]
     return sentence_words
 
-# Create folders to store data
+# ------------------------------- Create folders to store data -------------------------------
 DATA_DIR = Path("finance_data")  # Create a folder path
 DATA_DIR.mkdir(exist_ok=True)    # Make the folder if it doesn't exist
 USER_DB_FILE = DATA_DIR / "users.json"  # This is where we'll store user info
@@ -89,39 +90,6 @@ DB_PATH = DATA_DIR / "finance.db"  # SQLite database for expenses
 if not USER_DB_FILE.exists():
     with open(USER_DB_FILE, 'w') as f:
         json.dump({}, f, indent=4)
-
-# Function to validate email format
-def is_valid_email(email):
-    pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-    return re.match(pattern, email) is not None
-
-# Function to validate password strength
-def is_valid_password(password):
-    # Check if password is at least 8 characters long and contains at least 1 letter and 1 number
-    if len(password) < 8:
-        return False, "Password must be at least 8 characters long."
-    
-    if not any(char.isalpha() for char in password):
-        return False, "Password must contain at least one letter."
-    
-    if not any(char.isdigit() for char in password):
-        return False, "Password must contain at least one number."
-    
-    return True, "Password is valid."
-
-# Function to hash passwords
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
-
-# Function to load users
-def load_users():
-    with open(USER_DB_FILE, 'r') as f:
-        return json.load(f)
-
-# Function to save users with proper indentation
-def save_users(users):
-    with open(USER_DB_FILE, 'w') as f:
-        json.dump(users, f, indent=4)
 
 # Initialize SQLite database
 def init_db():
@@ -158,7 +126,42 @@ def init_db():
 # Call init_db to ensure tables exist
 init_db()
 
-# Function to add expense with better error handling and return ID
+# ---------------------------- Login/SignUp ----------------------------
+# Function to validate email format
+def is_valid_email(email):
+    pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+    return re.match(pattern, email) is not None
+
+# Function to validate password strength
+def is_valid_password(password):
+    # Check if password is at least 8 characters long and contains at least 1 letter and 1 number
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters long."
+    
+    if not any(char.isalpha() for char in password):
+        return False, "Password must contain at least one letter."
+    
+    if not any(char.isdigit() for char in password):
+        return False, "Password must contain at least one number."
+    
+    return True, "Password is valid."
+
+# Function to hash passwords
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+# Function to load users
+def load_users():
+    with open(USER_DB_FILE, 'r') as f:
+        return json.load(f)
+
+# Function to save users with proper indentation
+def save_users(users):
+    with open(USER_DB_FILE, 'w') as f:
+        json.dump(users, f, indent=4)
+
+# ------------------------------- Daily Spending Logging Function -------------------------------
+# Function to add expense 
 def add_expense(user_email, amount, description, category):
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -209,6 +212,56 @@ def get_expenses(user_email, limit=None, start_date=None, end_date=None):
     
     return expense_list
 
+# Function to get spending summary by category
+def get_spending_by_category(user_email, month=None, year=None):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    if month and year:
+        # Convert month name to month number for filtering
+        if isinstance(month, str):
+            try:
+                month_num = datetime.strptime(month, "%B").month
+            except ValueError:
+                month_num = datetime.now().month
+        else:
+            month_num = month
+            
+        # Create date range for filtering
+        start_date = f"{year}-{month_num:02d}-01"
+        if month_num == 12:
+            end_date = f"{year+1}-01-01"
+        else:
+            end_date = f"{year}-{month_num+1:02d}-01"
+        
+        c.execute("""
+            SELECT category, SUM(amount) 
+            FROM expenses 
+            WHERE user_email = ? AND date >= ? AND date < ? 
+            GROUP BY category
+        """, (user_email, start_date, end_date))
+    else:
+        # Current month by default
+        now = datetime.now()
+        month_start = datetime(now.year, now.month, 1).strftime("%Y-%m-%d")
+        if now.month == 12:
+            next_month = datetime(now.year + 1, 1, 1).strftime("%Y-%m-%d")
+        else:
+            next_month = datetime(now.year, now.month + 1, 1).strftime("%Y-%m-%d")
+        
+        c.execute("""
+            SELECT category, SUM(amount) 
+            FROM expenses 
+            WHERE user_email = ? AND date >= ? AND date < ? 
+            GROUP BY category
+        """, (user_email, month_start, next_month))
+    
+    categories = c.fetchall()
+    conn.close()
+    
+    return dict(categories)
+
+# -------------------------------- Budget Tracking Function -------------------------------
 # Function to set a budget
 def set_budget(user_email, category, amount, month, year):
     try:
@@ -265,55 +318,8 @@ def get_budgets(user_email, month=None, year=None):
     
     return budget_list
 
-# Function to get spending summary by category
-def get_spending_by_category(user_email, month=None, year=None):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    
-    if month and year:
-        # Convert month name to month number for filtering
-        if isinstance(month, str):
-            try:
-                month_num = datetime.strptime(month, "%B").month
-            except ValueError:
-                month_num = datetime.now().month
-        else:
-            month_num = month
-            
-        # Create date range for filtering
-        start_date = f"{year}-{month_num:02d}-01"
-        if month_num == 12:
-            end_date = f"{year+1}-01-01"
-        else:
-            end_date = f"{year}-{month_num+1:02d}-01"
-        
-        c.execute("""
-            SELECT category, SUM(amount) 
-            FROM expenses 
-            WHERE user_email = ? AND date >= ? AND date < ? 
-            GROUP BY category
-        """, (user_email, start_date, end_date))
-    else:
-        # Current month by default
-        now = datetime.now()
-        month_start = datetime(now.year, now.month, 1).strftime("%Y-%m-%d")
-        if now.month == 12:
-            next_month = datetime(now.year + 1, 1, 1).strftime("%Y-%m-%d")
-        else:
-            next_month = datetime(now.year, now.month + 1, 1).strftime("%Y-%m-%d")
-        
-        c.execute("""
-            SELECT category, SUM(amount) 
-            FROM expenses 
-            WHERE user_email = ? AND date >= ? AND date < ? 
-            GROUP BY category
-        """, (user_email, month_start, next_month))
-    
-    categories = c.fetchall()
-    conn.close()
-    
-    return dict(categories)
-
+# ------------------------------- Chatbot Intents Capture -------------------------------
+# ------------------------------- Not Completed -------------------------------
 # Function to format and save the intents file
 def save_intents(intents_data):
     with open('intents.json', 'w') as f:
@@ -332,7 +338,7 @@ def load_intents():
                 if intent["tag"] == "category_confirmation":
                     has_category_confirmation = True
                     break
-            
+            # Not completed 
             if not has_category_confirmation:
                 intents_data["intents"].append({
                     "tag": "category_confirmation",
@@ -439,22 +445,32 @@ def predict_intent(sentence, intents_json):
 
 # Function to extract entities from text
 def extract_entities(text):
-    text = text.lower()
+    text = text.lower().strip()
     entities = {}
+    
+    # Print debug info
+    st.session_state.debug_info = f"Extracting from: {text}"
     
     # Expense patterns to extract amount and description
     expense_patterns = [
-        r"spent (\$?[\d,.]+) on (.+)",
-        r"spent (\$?[\d,.]+) for (.+)",
-        r"i spent (\$?[\d,.]+) on (.+)",
-        r"i spent (\$?[\d,.]+) for (.+)",
-        r"i paid (\$?[\d,.]+) for (.+)",
-        r"paid (\$?[\d,.]+) for (.+)",
-        r"bought (.+) for (\$?[\d,.]+)",
-        r"purchased (.+) for (\$?[\d,.]+)",
-        r"(\$?[\d,.]+) for (.+)",
-        r"cost me (\$?[\d,.]+) for (.+)",
-        r"cost (\$?[\d,.]+) for (.+)"
+        r"spent (\$?[\d,.]+)\s*(?:rm)?\s*on (.+)",
+        r"spent (\$?[\d,.]+)\s*(?:rm)?\s*for (.+)",
+        r"i spent (\$?[\d,.]+)\s*(?:rm)?\s*on (.+)",
+        r"i spent (\$?[\d,.]+)\s*(?:rm)?\s*for (.+)",
+        r"i paid (\$?[\d,.]+)\s*(?:rm)?\s*for (.+)",
+        r"paid (\$?[\d,.]+)\s*(?:rm)?\s*for (.+)",
+        r"bought (.+) for (\$?[\d,.]+)\s*(?:rm)?",
+        r"purchased (.+) for (\$?[\d,.]+)\s*(?:rm)?",
+        r"(\$?[\d,.]+)\s*(?:rm)?\s*for (.+)",
+        r"rm\s*(\d+\.?\d*) for (.+)",
+        r"rm\s*(\d+\.?\d*) on (.+)",
+        r"rm(\d+\.?\d*) for (.+)",
+        r"rm(\d+\.?\d*) on (.+)"
+        r"rm ?(\d+\.?\d*) (.+)",  
+        r"rm(\d+) (.+)",          
+        r"(\d+) (?:rm|$) (.+)",   
+        r"(\d+) for (.+)",        
+        r"(\d+) on (.+)",        
     ]
     
     for pattern in expense_patterns:
@@ -465,25 +481,26 @@ def extract_entities(text):
             
             if "bought" in pattern or "purchased" in pattern:
                 entities["description"] = groups[0].strip()
-                entities["amount"] = groups[1].strip().replace('$', '').replace('RM', '')
+                amount_str = groups[1].strip().replace('$', '').replace('RM', '').replace('rm', '')
             else:
-                entities["amount"] = groups[0].strip().replace('$', '').replace('RM', '')
+                amount_str = groups[0].strip().replace('$', '').replace('RM', '').replace('rm', '')
                 entities["description"] = groups[1].strip()
             
             try:
-                entities["amount"] = float(entities["amount"].replace(',', ''))
+                entities["amount"] = float(amount_str.replace(',', ''))
             except ValueError:
+                st.error(f"Could not convert '{amount_str}' to a number")
                 pass
             
+            # Auto-categorize the expense
+            if "description" in entities:
+                category = categorize_expense(entities["description"])
+                entities["category"] = category
+                
+                # Debug info
+                st.session_state.debug_category = f"Categorized '{entities['description']}' as '{category}'"
+            
             break
-    
-    # If we found an amount and description, extract or determine category
-    if "amount" in entities and "description" in entities:
-        description = entities["description"]
-        
-        # Auto-categorize the expense
-        category = categorize_expense(description)
-        entities["category"] = category
     
     return entities
 
@@ -492,7 +509,7 @@ def categorize_expense(description):
     
     categories = {
         "food": ["grocery", "groceries", "restaurant", "lunch", "dinner", "breakfast", "food", "meal", "coffee", 
-                 "snack", "eat", "eating", "dining", "dine", "cafe", "cafeteria", "fastfood", "fast food", 
+                 "snack", "eat", "eating", "dining", "dine", "cafe", "cafeteria", "fastfood", "fast food", "drinks",
                  "takeout", "take-out", "takeaway", "take-away", "pizza", "burger", "sushi"],
         
         "transport": ["gas", "fuel", "bus", "train", "taxi", "grab", "uber", "lyft", "fare", "ticket", "transport",
