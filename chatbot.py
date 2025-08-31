@@ -334,6 +334,115 @@ def extract_entities(text):
     
     return entities
 
+# Add this function near the extract_entities function
+def extract_budget_entities(text):
+    text = text.lower().strip()
+    entities = {}
+    
+    # Budget patterns
+    budget_patterns = [
+        r"budget.*?(\$?[\d,.]+)\s*(?:rm)?\s*for (.+?)(?: for (january|february|march|april|may|june|july|august|september|october|november|december))?(?: (\d{4}))?",
+        r"set.*?budget.*?(\$?[\d,.]+)\s*(?:rm)?\s*for (.+?)(?: for (january|february|march|april|may|june|july|august|september|october|november|december))?(?: (\d{4}))?",
+        r"allocate.*?(\$?[\d,.]+)\s*(?:rm)?\s*for (.+?)(?: for (january|february|march|april|may|june|july|august|september|october|november|december))?(?: (\d{4}))?",
+        r"(\$?[\d,.]+)\s*(?:rm)?\s*for (.+?)(?: budget)(?: for (january|february|march|april|may|june|july|august|september|october|november|december))?(?: (\d{4}))?",
+        r"rm\s*(\d+\.?\d*)\s*for (.+?)(?: for (january|february|march|april|may|june|july|august|september|october|november|december))?(?: (\d{4}))?",
+        r"set.*?(\w+)\s*budget",  # New pattern: "set transportation budget"
+        r"budget.*?for (\w+)",    # New pattern: "budget for transportation"
+    ]
+    
+    for pattern in budget_patterns:
+        match = re.search(pattern, text)
+        if match:
+            groups = match.groups()
+            
+            # Handle patterns with amounts
+            if pattern in [r"set.*?(\w+)\s*budget", r"budget.*?for (\w+)"]:
+                # These are the new patterns that only extract category
+                category_text = groups[0].strip()
+                
+                # Map to standard categories
+                category_map = {
+                    "food": "food", "groceries": "food", "eating": "food", "restaurant": "food",
+                    "transport": "transport", "transportation": "transport", "gas": "transport", "fuel": "transport", "bus": "transport", "train": "transport", "taxi": "transport",
+                    "entertainment": "entertainment", "movies": "entertainment", "games": "entertainment", "fun": "entertainment",
+                    "shopping": "shopping", "clothes": "shopping", "items": "shopping", "purchases": "shopping",
+                    "utilities": "utilities", "bills": "utilities", "electricity": "utilities", "water": "utilities", "internet": "utilities", "phone": "utilities",
+                    "housing": "housing", "rent": "housing", "mortgage": "housing", "home": "housing",
+                    "healthcare": "healthcare", "medical": "healthcare", "health": "healthcare", "doctor": "healthcare",
+                    "education": "education", "school": "education", "books": "education", "courses": "education",
+                    "other": "other", "misc": "other"
+                }
+                
+                # Find the matching category
+                entities["category"] = "other"
+                for keyword, category_name in category_map.items():
+                    if keyword in category_text:
+                        entities["category"] = category_name
+                        break
+                
+                break
+            
+            # Handle amount patterns (original code)
+            amount_str = groups[0].replace('$', '').replace('RM', '').replace('rm', '').replace(',', '')
+            
+            try:
+                entities["amount"] = float(amount_str)
+            except ValueError:
+                continue
+            
+            # Extract category from amount patterns
+            category_text = groups[1].strip()
+            
+            # Map to standard categories
+            category_map = {
+                "food": "food", "groceries": "food", "eating": "food", "restaurant": "food",
+                "transport": "transport", "transportation": "transport", "gas": "transport", "fuel": "transport", "bus": "transport", "train": "transport", "taxi": "transport",
+                "entertainment": "entertainment", "movies": "entertainment", "games": "entertainment", "fun": "entertainment",
+                "shopping": "shopping", "clothes": "shopping", "items": "shopping", "purchases": "shopping",
+                "utilities": "utilities", "bills": "utilities", "electricity": "utilities", "water": "utilities", "internet": "utilities", "phone": "utilities",
+                "housing": "housing", "rent": "housing", "mortgage": "housing", "home": "housing",
+                "healthcare": "healthcare", "medical": "healthcare", "health": "healthcare", "doctor": "healthcare",
+                "education": "education", "school": "education", "books": "education", "courses": "education",
+                "other": "other", "misc": "other"
+            }
+            
+            # Find the matching category
+            entities["category"] = "other"
+            for keyword, category_name in category_map.items():
+                if keyword in category_text:
+                    entities["category"] = category_name
+                    break
+            
+            # Extract month if specified
+            if len(groups) > 2 and groups[2]:
+                month_map = {
+                    "jan": "January", "january": "January",
+                    "feb": "February", "february": "February",
+                    "mar": "March", "march": "March",
+                    "apr": "April", "april": "April",
+                    "may": "May",
+                    "jun": "June", "june": "June",
+                    "jul": "July", "july": "July",
+                    "aug": "August", "august": "August",
+                    "sep": "September", "september": "September",
+                    "oct": "October", "october": "October",
+                    "nov": "November", "november": "November",
+                    "dec": "December", "december": "December"
+                }
+                month_lower = groups[2].lower()
+                entities["month"] = month_map.get(month_lower, datetime.now().strftime("%B"))
+            
+            # Extract year if specified
+            if len(groups) > 3 and groups[3]:
+                try:
+                    entities["year"] = int(groups[3])
+                except ValueError:
+                    pass
+            
+            break
+    
+    return entities
+
 # Function to add a custom category
 def add_custom_category(category):
     # Initialize if needed
@@ -826,7 +935,6 @@ def get_response(intent_tag, text, user_email):
     # Default response if no fallback is found
     return "I'm your personal finance assistant. You can ask me to record expenses, check your budget, or provide spending summaries. Type 'help' to see all the things I can do!"
 
-# Function to process user input with yes/no handling for category confirmation
 def process_user_input(input_text, user_email):
     """
     Process user input, handling expense entry, confirmation, and general queries.
@@ -1031,13 +1139,246 @@ def process_user_input(input_text, user_email):
     # Store debug info
     st.session_state.debug_info = "\n".join(debug_info)
     
-    # Get response based on intent
+    # Handle budget_set intent specifically
+    if intent_tag == "budget_set":
+        # Check if we're in the middle of a budget setting conversation
+        if "budget_conversation" in st.session_state:
+            stage = st.session_state.budget_conversation["stage"]
+            
+            if stage == "ask_amount":
+                # User is responding with an amount
+                amount_match = re.search(r"(\d+\.?\d*)", input_text)
+                if amount_match:
+                    try:
+                        amount = float(amount_match.group(1))
+                        # Store the amount and move to confirmation stage
+                        st.session_state.budget_conversation["amount"] = amount
+                        st.session_state.budget_conversation["stage"] = "confirm"
+                        
+                        category = st.session_state.budget_conversation["category"]
+                        return f"Confirm: Set budget of RM{amount:.2f} for {category.title()}? Type 'YES' to confirm or 'NO' to cancel."
+                    except ValueError:
+                        return "I couldn't understand that amount. Please provide a number like '500' or '500.50'."
+                else:
+                    return "I couldn't find a valid amount in your message. Please provide a number like '500' or '500.50'."
+            
+            elif stage == "confirm":
+                # User is confirming the budget
+                if input_text.lower() in ["yes", "y", "confirm", "ok"]:
+                    # Get the budget details
+                    category = st.session_state.budget_conversation["category"]
+                    amount = st.session_state.budget_conversation["amount"]
+                    month = datetime.now().strftime("%B")
+                    year = datetime.now().year
+                    
+                    # Set the budget
+                    success = set_budget(user_email, category, amount, month, year)
+                    
+                    # Clear the conversation state
+                    del st.session_state.budget_conversation
+                    
+                    if success:
+                        return f"Great! I've set your budget for {category.title()} to RM{amount:.2f} for {month} {year}."
+                    else:
+                        return "Sorry, I couldn't set that budget. Please try again."
+                
+                elif input_text.lower() in ["no", "n", "cancel"]:
+                    # Clear the conversation state
+                    del st.session_state.budget_conversation
+                    return "Budget setting cancelled. What would you like to do instead?"
+                
+                else:
+                    return "Please type 'YES' to confirm or 'NO' to cancel the budget setting."
+        
+        else:
+            # New budget request - try to extract category from the message
+            category = None
+            
+            # Check if the message contains a category
+            category_keywords = {
+                "food": ["food", "groceries", "eating", "restaurant", "lunch", "dinner", "breakfast"],
+                "transport": ["transport", "transportation", "gas", "fuel", "bus", "train", "taxi", "grab"],
+                "entertainment": ["entertainment", "movies", "games", "fun", "leisure", "cinema"],
+                "shopping": ["shopping", "clothes", "items", "purchases", "mall", "store"],
+                "utilities": ["utilities", "bills", "electricity", "water", "internet", "phone"],
+                "housing": ["housing", "rent", "mortgage", "home", "apartment"],
+                "healthcare": ["healthcare", "medical", "health", "doctor", "hospital"],
+                "education": ["education", "school", "books", "courses", "tuition"],
+                "other": ["other", "misc", "miscellaneous"]
+            }
+            
+            input_lower = input_text.lower()
+            for cat, keywords in category_keywords.items():
+                for keyword in keywords:
+                    if keyword in input_lower:
+                        category = cat
+                        break
+                if category:
+                    break
+            
+            if category:
+                # Found a category in the initial request
+                st.session_state.budget_conversation = {
+                    "stage": "ask_amount",
+                    "category": category
+                }
+                return f"Sure! How much would you like to budget for {category.title()}? (e.g., RM500)"
+            else:
+                # No category found, ask for it
+                st.session_state.budget_conversation = {"stage": "ask_category"}
+                return "Which category would you like to set a budget for? (Food, Transport, Entertainment, Shopping, Utilities, Housing, Healthcare, Education, Other)"
+    
+    # Handle responses in the middle of budget conversation
+    # Replace the entire budget conversation section with this more robust version:
+
+    # In the budget conversation section, replace the category detection part with this:
+
+    elif "budget_conversation" in st.session_state:
+        stage = st.session_state.budget_conversation["stage"]
+    
+    # First, check if user wants to cancel or change their mind
+    cancel_words = ["cancel", "stop", "nevermind", "never mind", "forget it", "change mind"]
+    if any(word in input_text.lower() for word in cancel_words):
+        del st.session_state.budget_conversation
+        return "Okay, cancelled the budget setting. What would you like to do instead?"
+    
+    # Check if user is trying to specify a different category
+    input_lower = input_text.lower()
+    
+    # Simple category detection - check for category keywords directly
+    if "food" in input_lower or "grocery" in input_lower or "restaurant" in input_lower:
+        new_category = "food"
+    elif "transport" in input_lower or "bus" in input_lower or "train" in input_lower or "taxi" in input_lower or "gas" in input_lower:
+        new_category = "transport"
+    elif "entertainment" in input_lower or "movie" in input_lower or "game" in input_lower or "fun" in input_lower:
+        new_category = "entertainment"
+    elif "shopping" in input_lower or "clothes" in input_lower or "mall" in input_lower or "store" in input_lower:
+        new_category = "shopping"
+    elif "utilities" in input_lower or "bill" in input_lower or "electric" in input_lower or "water" in input_lower or "internet" in input_lower:
+        new_category = "utilities"
+    elif "housing" in input_lower or "rent" in input_lower or "mortgage" in input_lower or "home" in input_lower:
+        new_category = "housing"
+    elif "health" in input_lower or "medical" in input_lower or "doctor" in input_lower:
+        new_category = "healthcare"
+    elif "education" in input_lower or "school" in input_lower or "book" in input_lower:
+        new_category = "education"
+    elif "other" in input_lower or "misc" in input_lower:
+        new_category = "other"
+    else:
+        new_category = None
+    
+    # If user specified a new category during the conversation
+    if new_category:
+        if stage == "ask_amount":
+            # User changed their mind about category
+            st.session_state.budget_conversation["category"] = new_category
+            return f"Okay, changed to {new_category.title()}. How much would you like to budget for {new_category.title()}? (e.g., RM500)"
+        elif stage == "confirm":
+            # User changed their mind during confirmation
+            st.session_state.budget_conversation["category"] = new_category
+            st.session_state.budget_conversation["stage"] = "ask_amount"
+            return f"Okay, changed to {new_category.title()}. How much would you like to budget for {new_category.title()}? (e.g., RM500)"
+        else:
+            # If we're in ask_category stage but user specified a category, use it
+            st.session_state.budget_conversation["category"] = new_category
+            st.session_state.budget_conversation["stage"] = "ask_amount"
+            return f"Sure! How much would you like to budget for {new_category.title()}? (e.g., RM500)"
+    
+    # Normal conversation flow
+    if stage == "ask_category":
+        # User is providing a category
+        category = input_text.lower().strip()
+        
+        # Simple category mapping
+        if "food" in category or "grocery" in category or "restaurant" in category:
+            selected_category = "food"
+        elif "transport" in category or "bus" in category or "train" in category or "taxi" in category:
+            selected_category = "transport"
+        elif "entertainment" in category or "movie" in category or "game" in category:
+            selected_category = "entertainment"
+        elif "shopping" in category or "clothes" in category or "mall" in category:
+            selected_category = "shopping"
+        elif "utilities" in category or "bill" in category or "electric" in category:
+            selected_category = "utilities"
+        elif "housing" in category or "rent" in category or "mortgage" in category:
+            selected_category = "housing"
+        elif "health" in category or "medical" in category or "doctor" in category:
+            selected_category = "healthcare"
+        elif "education" in category or "school" in category or "book" in category:
+            selected_category = "education"
+        else:
+            selected_category = "other"
+        
+        # Store the category and move to next stage
+        st.session_state.budget_conversation["category"] = selected_category
+        st.session_state.budget_conversation["stage"] = "ask_amount"
+        return f"Sure! How much would you like to budget for {selected_category.title()}? (e.g., RM500)"
+    
+    elif stage == "ask_amount":
+        # User is responding with an amount
+        amount_match = re.search(r"(\d+\.?\d*)", input_text)
+        if amount_match:
+            try:
+                amount = float(amount_match.group(1))
+                # Store the amount and move to confirmation stage
+                st.session_state.budget_conversation["amount"] = amount
+                st.session_state.budget_conversation["stage"] = "confirm"
+                
+                category = st.session_state.budget_conversation["category"]
+                return f"Confirm: Set budget of RM{amount:.2f} for {category.title()}? Type 'YES' to confirm or 'NO' to cancel."
+            except ValueError:
+                return "I couldn't understand that amount. Please provide a number like '500' or '500.50'."
+        else:
+            # If no amount found, check if user wants to change category
+            if "change" in input_lower or "different" in input_lower:
+                st.session_state.budget_conversation["stage"] = "ask_category"
+                return "Which category would you like to set a budget for instead? (Food, Transport, Entertainment, Shopping, Utilities, Housing, Healthcare, Education, Other)"
+            else:
+                return "I couldn't find a valid amount. Please provide a number like '500' or '500.50'. Or say 'change category' if you want to pick a different category."
+    
+    elif stage == "confirm":
+        # User is confirming the budget
+        if input_text.lower() in ["yes", "y", "confirm", "ok"]:
+            # Get the budget details
+            category = st.session_state.budget_conversation["category"]
+            amount = st.session_state.budget_conversation["amount"]
+            month = datetime.now().strftime("%B")
+            year = datetime.now().year
+            
+            # Set the budget
+            success = set_budget(user_email, category, amount, month, year)
+            
+            # Clear the conversation state
+            del st.session_state.budget_conversation
+            
+            if success:
+                return f"Great! ✅ I've set your budget for {category.title()} to RM{amount:.2f} for {month} {year}."
+            else:
+                return "Sorry, I couldn't set that budget. Please try again."
+        
+        elif input_text.lower() in ["no", "n", "cancel"]:
+            # Clear the conversation state
+            del st.session_state.budget_conversation
+            return "Budget setting cancelled. What would you like to do instead?"
+        
+        else:
+            # Check if user wants to change amount or category during confirmation
+            if "change amount" in input_lower or "different amount" in input_lower:
+                st.session_state.budget_conversation["stage"] = "ask_amount"
+                return f"How much would you like to budget for {st.session_state.budget_conversation['category'].title()} instead?"
+            elif "change category" in input_lower or "different category" in input_lower:
+                st.session_state.budget_conversation["stage"] = "ask_category"
+                return "Which category would you like to set a budget for instead? (Food, Transport, Entertainment, Shopping, Utilities, Housing, Healthcare, Education, Other)"
+            else:
+                return "Please type 'YES' to confirm or 'NO' to cancel. Or say 'change amount' or 'change category' if you want to make changes."
+
+    # Get response based on intent for all other intents
     try:
-        # Use get_response to handle regular intents
+    # Use get_response to handle regular intents
         return get_response(intent_tag, input_text, user_email)
     except Exception as e:
         st.error(f"Error generating response: {str(e)}")
-        return "I'm having trouble understanding that. Could you try rephrasing your request?"
+    return "I'm having trouble understanding that. Could you try rephrasing your request?"
 
 # -------------------------------- UI Layout --------------------------------
 # Add a header

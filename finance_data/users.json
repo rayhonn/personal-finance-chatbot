@@ -13,5 +13,10 @@
         "name": "Jane",
         "password": "f3f197f8dddc37d3a4311035c50ace9a35a0e3595153a1a47e72c58ecaccfcd3",
         "joined_date": "2025-08-27 23:30:13"
+    },
+    "rayh@gmail.com": {
+        "name": "raymond",
+        "password": "407127f0bb9e62c6d1b86d02af7cefc69265fd44e628502c05f9bc04cda33c42",
+        "joined_date": "2025-08-31 15:15:02"
     }
 }
