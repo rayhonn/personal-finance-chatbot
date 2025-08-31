@@ -1033,6 +1033,36 @@ def get_response(intent_tag, text, user_email):
     # Default response if no fallback is found
     return "I'm your personal finance assistant. You can ask me to record expenses, check your budget, or provide spending summaries. Type 'help' to see all the things I can do!"
 
+def debug_intent_classification(input_text):
+    """Debug function to see how intents are being classified"""
+    intent_tag, confidence = predict_intent(input_text, intents)
+    
+    # Enhanced budget query detection
+    input_lower = input_text.lower()
+    
+    # Check if this should be budget_query instead of budget_set
+    budget_query_indicators = [
+        "show", "view", "check", "what is", "what's", "how is", "how's", 
+        "status", "progress", "overview", "summary", "see my", "look at",
+        "display", "current", "my budget"
+    ]
+    
+    budget_set_indicators = [
+        "set", "create", "make", "establish", "new", "setup", "allocate", 
+        "limit", "want to", "help me", "i need to"
+    ]
+    
+    has_query_indicator = any(indicator in input_lower for indicator in budget_query_indicators)
+    has_set_indicator = any(indicator in input_lower for indicator in budget_set_indicators)
+    
+    # Override intent if needed
+    if has_query_indicator and not has_set_indicator and "budget" in input_lower:
+        intent_tag = "budget_query"
+    elif has_set_indicator and "budget" in input_lower:
+        intent_tag = "budget_set"
+    
+    return intent_tag, confidence
+
 def process_user_input(input_text, user_email):
     """
     Process user input, handling expense entry, confirmation, and general queries.
@@ -1042,9 +1072,173 @@ def process_user_input(input_text, user_email):
     debug_info.append(f"Input: {input_text}")
     debug_info.append(f"Messages count: {len(st.session_state.messages) if 'messages' in st.session_state else 0}")
     debug_info.append(f"Has pending_expense: {'pending_expense' in st.session_state}")
+    debug_info.append(f"Has budget_conversation: {'budget_conversation' in st.session_state}")
     
-    # IMPORTANT FIX: We need to look at the assistant's last message, not the user's
-    # Find the last assistant message
+    # PRIORITY 1: Handle budget conversation first (highest priority)
+    if "budget_conversation" in st.session_state:
+        debug_info.append("Processing budget conversation")
+        stage = st.session_state.budget_conversation["stage"]
+        input_lower = input_text.lower()
+        
+        # Enhanced cancel detection
+        cancel_words = ["cancel", "stop", "nevermind", "never mind", "forget it", "change mind", "quit", "exit", "abort", "back"]
+        if any(word in input_lower for word in cancel_words):
+            del st.session_state.budget_conversation
+            st.session_state.debug_info = "\n".join(debug_info)
+            return "No problem at all! 😊 Budget planning should never feel rushed.\n\nWhenever you're ready to set up a budget, just say **'set budget'** and I'll be here to help you through it step by step!\n\nIs there anything else I can help you with right now? 💭"
+        
+        # Handle different stages of budget conversation
+        if stage == "ask_category":
+            debug_info.append("Budget conversation: ask_category stage")
+            # User is providing a category
+            category = input_text.lower().strip()
+            
+            # Enhanced category mapping
+            if any(word in category for word in ["food", "grocery", "restaurant", "meal", "dining", "eat", "lunch", "dinner", "breakfast"]):
+                selected_category = "food"
+            elif any(word in category for word in ["transport", "bus", "train", "taxi", "car", "travel", "commute", "gas", "fuel", "drive"]):
+                selected_category = "transport"
+            elif any(word in category for word in ["entertainment", "movie", "game", "fun", "show", "streaming", "netflix", "cinema"]):
+                selected_category = "entertainment"
+            elif any(word in category for word in ["shopping", "clothes", "mall", "store", "fashion", "cloth", "purchase", "stuff"]):
+                selected_category = "shopping"
+            elif any(word in category for word in ["utilities", "bill", "electric", "water", "internet", "phone", "wifi", "utility"]):
+                selected_category = "utilities"
+            elif any(word in category for word in ["housing", "rent", "mortgage", "home", "apartment", "house", "accommodation"]):
+                selected_category = "housing"
+            elif any(word in category for word in ["health", "medical", "doctor", "hospital", "medicine", "clinic", "pharmacy"]):
+                selected_category = "healthcare"
+            elif any(word in category for word in ["education", "school", "book", "tuition", "learn", "course", "study", "university"]):
+                selected_category = "education"
+            else:
+                selected_category = "other"
+            
+            # Store the category and move to next stage
+            st.session_state.budget_conversation["category"] = selected_category
+            st.session_state.budget_conversation["stage"] = "ask_amount"
+            
+            category_encouragement = {
+                "food": "Excellent choice! Food budgeting is one of the most impactful areas. 🍽️",
+                "transport": "Smart pick! Transport costs can really sneak up on you. 🚗",
+                "entertainment": "Great thinking! It's important to budget for the fun stuff too. 🎬",
+                "shopping": "Good idea! Shopping budgets help prevent those impulse buys. 🛍️",
+                "utilities": "Very practical! Bills are so predictable when budgeted properly. 💡",
+                "housing": "Essential choice! Housing is typically the biggest expense. 🏠",
+                "healthcare": "Wise decision! Healthcare costs can be unpredictable. ⚕️",
+                "education": "Fantastic! Investing in knowledge always pays off. 📚",
+                "other": "Smart to budget for miscellaneous expenses! 📦"
+            }
+            
+            encouragement = category_encouragement.get(selected_category, "Great choice for budgeting! 💰")
+            
+            st.session_state.debug_info = "\n".join(debug_info)
+            return f"**{selected_category.title()} Budget** - {encouragement}\n\nNow for the fun part! What's a realistic monthly amount you'd like to set aside for {selected_category.title()}?\n\nThink about your typical spending in this area and what feels manageable. You can always adjust it later!\n\nJust tell me the amount - like **'350'** for RM350. What sounds right to you? 🤔"
+        
+        elif stage == "ask_amount":
+            debug_info.append("Budget conversation: ask_amount stage")
+            
+            # IMPORTANT: Extract amount from budget conversation context, not expense patterns
+            amount_match = re.search(r"(\d+\.?\d*)", input_text)
+            if amount_match:
+                try:
+                    amount = float(amount_match.group(1))
+                    # Store the amount and move to confirmation stage
+                    st.session_state.budget_conversation["amount"] = amount
+                    st.session_state.budget_conversation["stage"] = "confirm"
+                    
+                    category = st.session_state.budget_conversation["category"]
+                    
+                    # Personalized responses based on amount ranges
+                    if amount >= 1000:
+                        amount_feedback = "That's a substantial budget! 💪 You're really committed to managing this area well."
+                    elif amount >= 500:
+                        amount_feedback = "That sounds like a well-thought-out amount! 👍 Very reasonable."
+                    elif amount >= 200:
+                        amount_feedback = "Great! That's a practical and manageable budget. 😊"
+                    elif amount >= 50:
+                        amount_feedback = "Smart to start conservative! 🎯 You can always increase it later."
+                    else:
+                        amount_feedback = "That's a tight budget! 💪 Great discipline - every ringgit counts!"
+                    
+                    st.session_state.debug_info = "\n".join(debug_info)
+                    return f"**RM{amount:.2f} for {category.title()}** - {amount_feedback}\n\n📋 **Quick Summary:**\n• Category: **{category.title()}**\n• Monthly Budget: **RM{amount:.2f}**\n• This will help you track and control your {category.lower()} spending!\n\nShall I activate this budget for you? Say **'yes'** to confirm or **'no'** to make changes! 🚀"
+                except ValueError:
+                    st.session_state.debug_info = "\n".join(debug_info)
+                    return "Oops! I'm having trouble reading that number! 😅\n\nCould you help me out by typing just the amount as a simple number?\n\n**Examples:**\n• Type **'250'** for RM250\n• Type **'99.50'** for RM99.50\n\nWhat amount would you like to budget? 💰"
+            else:
+                # Check for category change requests
+                if any(word in input_lower for word in ["change", "different", "switch", "another", "other"]):
+                    st.session_state.budget_conversation["stage"] = "ask_category"
+                    st.session_state.debug_info = "\n".join(debug_info)
+                    return "Sure thing! Let's pick a different category! 🔄\n\nWhich spending area would you prefer to budget for? You can choose from Food, Transport, Entertainment, Shopping, Utilities, Housing, Healthcare, Education, or Other!\n\nWhat sounds more interesting to you? 😊"
+                else:
+                    st.session_state.debug_info = "\n".join(debug_info)
+                    return "I'm looking for the budget amount, but I can't quite find it in your message! 🔍\n\nCould you tell me how much you'd like to set aside for this category? Just the number is perfect!\n\n**For example:** Type **'400'** for RM400\n\nWhat's your ideal budget amount? 💡"
+        
+        elif stage == "confirm":
+            debug_info.append("Budget conversation: confirm stage")
+            
+            # User is confirming the budget
+            if input_text.lower() in ["yes", "y", "confirm", "ok", "sure", "go ahead", "do it", "yep", "yup", "absolutely", "definitely", "perfect"]:
+                # Get the budget details
+                category = st.session_state.budget_conversation["category"]
+                amount = st.session_state.budget_conversation["amount"]
+                month = datetime.now().strftime("%B")
+                year = datetime.now().year
+                
+                # Set the budget
+                success = set_budget(user_email, category, amount, month, year)
+                
+                # Clear the conversation state
+                del st.session_state.budget_conversation
+                
+                if success:
+                    # Multiple celebration messages
+                    celebration_intros = [
+                        "🎉 **Woohoo! Budget Activated!**",
+                        "✅ **Success! You're All Set!**", 
+                        "🌟 **Fantastic! Budget is Live!**",
+                        "🚀 **Amazing! Budget Locked In!**"
+                    ]
+                    
+                    motivational_endings = [
+                        "You're building incredible financial habits! 💪",
+                        "This is going to make such a difference in your money management! 📊",
+                        "Smart money moves like this add up to big wins! 🏆",
+                        "I'm so proud of you for taking control of your finances! 🌟",
+                        "You're on the path to financial success! 🎯"
+                    ]
+                    
+                    intro = random.choice(celebration_intros)
+                    ending = random.choice(motivational_endings)
+                    
+                    st.session_state.debug_info = "\n".join(debug_info)
+                    return f"{intro}\n\nYour **{category.title()}** budget of **RM{amount:.2f}** is now active for {month} {year}!\n\n{ending}\n\nI'll keep track of your spending and let you know how you're doing. Want to set up more budgets? Just say **'set budget'** again! 😊"
+                else:
+                    st.session_state.debug_info = "\n".join(debug_info)
+                    return "Oh dear! 😔 Something went wrong on my end while setting up your budget.\n\nThis is unusual - could you please try again? I really want to get this perfect for you! Sometimes technology has its hiccups, but we'll get through this together! 💪"
+            
+            elif input_text.lower() in ["no", "n", "cancel", "wait", "hold on", "not yet", "nope", "stop", "not really"]:
+                # Clear the conversation state
+                del st.session_state.budget_conversation
+                st.session_state.debug_info = "\n".join(debug_info)
+                return "Absolutely no problem! 😊 I totally understand wanting to get the numbers just right.\n\nBudgeting is personal, and it should feel comfortable for you. Take your time to think about what works best!\n\nWhen you're ready to try again, just say **'set budget'** and I'll be right here to help! Is there anything else I can assist you with? 💭"
+            
+            else:
+                # Handle unclear confirmation responses
+                if any(phrase in input_lower for phrase in ["change amount", "different amount", "wrong amount", "adjust amount", "modify amount"]):
+                    st.session_state.budget_conversation["stage"] = "ask_amount"
+                    st.session_state.debug_info = "\n".join(debug_info)
+                    return f"Of course! Let's adjust the amount for your **{st.session_state.budget_conversation['category'].title()}** budget! 🔧\n\nWhat amount would you prefer instead? Just give me the new number! 💰"
+                elif any(phrase in input_lower for phrase in ["change category", "different category", "wrong category", "switch category"]):
+                    st.session_state.budget_conversation["stage"] = "ask_category"
+                    st.session_state.debug_info = "\n".join(debug_info)
+                    return "Sure thing! Let's switch to a different category! 🔄\n\nWhich spending area would you like to budget for instead? Choose from Food, Transport, Entertainment, Shopping, Utilities, Housing, Healthcare, Education, or Other! 😊"
+                else:
+                    st.session_state.debug_info = "\n".join(debug_info)
+                    return "I want to make sure I understand you perfectly! 😊\n\n**Could you say:**\n• **'Yes'** to activate this budget\n• **'No'** if you'd like to make changes\n\nI'm here to get this exactly right for you! 🎯"
+    
+    # PRIORITY 2: Handle expense confirmation flow
     assistant_messages = [msg for msg in st.session_state.messages if msg["role"] == "assistant"]
     
     if assistant_messages and "pending_expense" in st.session_state:
@@ -1058,7 +1252,7 @@ def process_user_input(input_text, user_email):
             debug_info.append(f"In confirmation flow, input: {input_lower}")
             
             # Handle YES responses
-            if input_lower == "yes" or input_lower == "y" or input_lower == "yeah" or input_lower == "correct" or input_lower == "that's right" or input_lower == "right" or input_lower == "yep" or input_lower == "yup" or input_lower == "sure":
+            if input_lower in ["yes", "y", "yeah", "correct", "that's right", "right", "yep", "yup", "sure"]:
                 debug_info.append("Detected YES response")
                 # User confirmed the category - finalize the expense
                 del st.session_state.pending_expense
@@ -1066,7 +1260,7 @@ def process_user_input(input_text, user_email):
                 return "Great! Your expense has been recorded successfully. What else can I help you with today?"
             
             # Handle NO responses
-            elif input_lower == "no" or input_lower == "n" or input_lower == "nope" or "change" in input_lower or "wrong" in input_lower or "incorrect" in input_lower:
+            elif input_lower in ["no", "n", "nope"] or any(word in input_lower for word in ["change", "wrong", "incorrect"]):
                 debug_info.append(f"Detected NO response: {input_lower}")
                 # Set state to collect new category
                 st.session_state.correction_stage = "ask_what_to_change"
@@ -1079,8 +1273,7 @@ def process_user_input(input_text, user_email):
                 st.session_state.debug_info = "\n".join(debug_info)
                 return "I didn't understand that. Is the category correct? Please answer with yes or no."
     
-    # The rest of the function remains the same...
-    # CASE 2: Asking what to change (category or amount)
+    # PRIORITY 3: Handle expense correction stages
     if "correction_stage" in st.session_state and st.session_state.correction_stage == "ask_what_to_change" and "pending_expense" in st.session_state:
         input_lower = input_text.lower().strip()
         debug_info.append(f"In correction stage 'ask_what_to_change', input: {input_lower}")
@@ -1116,7 +1309,7 @@ def process_user_input(input_text, user_email):
             st.session_state.debug_info = "\n".join(debug_info)
             return f"I'll help you change the category. What category would you like to use instead? Choose from: {categories_list}, or type a custom category."
     
-    # CASE 3: Changing the category
+    # PRIORITY 4: Handle category/amount changes
     elif "correction_stage" in st.session_state and st.session_state.correction_stage == "change_category" and "pending_expense" in st.session_state:
         # User is providing a new category
         new_category = input_text.lower().strip()
@@ -1154,7 +1347,6 @@ def process_user_input(input_text, user_email):
             st.session_state.debug_info = "\n".join(debug_info)
             return "Sorry, I had trouble updating the category. Can you try again?"
     
-    # CASE 4: Changing the amount
     elif "correction_stage" in st.session_state and st.session_state.correction_stage == "change_amount" and "pending_expense" in st.session_state:
         # Extract the new amount
         input_lower = input_text.lower().strip()
@@ -1190,8 +1382,8 @@ def process_user_input(input_text, user_email):
             st.session_state.debug_info = "\n".join(debug_info)
             return "I couldn't find a valid amount in your message. Please just provide the number, like '25' or '25.50'."
     
-    # Step 2: If not in a confirmation flow, check if input is an expense
-    debug_info.append("Not in confirmation flow or confirmation condition not met")
+    # PRIORITY 5: Check if input is an expense (only if not in budget conversation)
+    debug_info.append("Checking for expense patterns")
     entities = extract_entities(input_text)
     debug_info.append(f"Extracted entities: {entities}")
     
@@ -1224,286 +1416,119 @@ def process_user_input(input_text, user_email):
             st.session_state.debug_info = "\n".join(debug_info)
             return "I couldn't record your expense. Please try again with format like 'spent RM50 on lunch'."
     
-    # Step 3: If not a confirmation or direct expense, handle with intents
+    # PRIORITY 6: Handle intents (budget_set, budget_query, etc.)
     debug_info.append("Processing as regular intent")
-    intent_tag, confidence = predict_intent(input_text, intents)
-    debug_info.append(f"Predicted intent: {intent_tag} with confidence: {confidence}")
     
-    # If it looks like an expense but the intent wasn't detected correctly
-    if "amount" in entities and "description" in entities and intent_tag != "expense_add":
-        debug_info.append("Overriding intent to expense_add")
-        intent_tag = "expense_add"  # Override the intent
+    # Use improved intent classification
+    intent_tag, confidence = debug_intent_classification(input_text)
+    debug_info.append(f"Predicted intent: {intent_tag} with confidence: {confidence}")
     
     # Store debug info
     st.session_state.debug_info = "\n".join(debug_info)
     
     # Handle budget_set intent specifically
     if intent_tag == "budget_set":
-        # Check if we're in the middle of a budget setting conversation
-        if "budget_conversation" in st.session_state:
-            stage = st.session_state.budget_conversation["stage"]
-            
-            if stage == "ask_amount":
-                # User is responding with an amount
-                amount_match = re.search(r"(\d+\.?\d*)", input_text)
-                if amount_match:
-                    try:
-                        amount = float(amount_match.group(1))
-                        # Store the amount and move to confirmation stage
-                        st.session_state.budget_conversation["amount"] = amount
-                        st.session_state.budget_conversation["stage"] = "confirm"
-                        
-                        category = st.session_state.budget_conversation["category"]
-                        return f"Confirm: Set budget of RM{amount:.2f} for {category.title()}? Type 'YES' to confirm or 'NO' to cancel."
-                    except ValueError:
-                        return "I couldn't understand that amount. Please provide a number like '500' or '500.50'."
-                else:
-                    return "I couldn't find a valid amount in your message. Please provide a number like '500' or '500.50'."
-            
-            elif stage == "confirm":
-                # User is confirming the budget
-                if input_text.lower() in ["yes", "y", "confirm", "ok"]:
-                    # Get the budget details
-                    category = st.session_state.budget_conversation["category"]
-                    amount = st.session_state.budget_conversation["amount"]
-                    month = datetime.now().strftime("%B")
-                    year = datetime.now().year
-                    
-                    # Set the budget
-                    success = set_budget(user_email, category, amount, month, year)
-                    
-                    # Clear the conversation state
-                    del st.session_state.budget_conversation
-                    
-                    if success:
-                        return f"Great! I've set your budget for {category.title()} to RM{amount:.2f} for {month} {year}."
-                    else:
-                        return "Sorry, I couldn't set that budget. Please try again."
-                
-                elif input_text.lower() in ["no", "n", "cancel"]:
-                    # Clear the conversation state
-                    del st.session_state.budget_conversation
-                    return "Budget setting cancelled. What would you like to do instead?"
-                
-                else:
-                    return "Please type 'YES' to confirm or 'NO' to cancel the budget setting."
+        debug_info.append("Processing budget_set intent")
         
-        else:
-            # New budget request - try to extract category from the message
-            category = None
-            
-            # Check if the message contains a category
-            category_keywords = {
-                "food": ["food", "groceries", "eating", "restaurant", "lunch", "dinner", "breakfast"],
-                "transport": ["transport", "transportation", "gas", "fuel", "bus", "train", "taxi", "grab"],
-                "entertainment": ["entertainment", "movies", "games", "fun", "leisure", "cinema"],
-                "shopping": ["shopping", "clothes", "items", "purchases", "mall", "store"],
-                "utilities": ["utilities", "bills", "electricity", "water", "internet", "phone"],
-                "housing": ["housing", "rent", "mortgage", "home", "apartment"],
-                "healthcare": ["healthcare", "medical", "health", "doctor", "hospital"],
-                "education": ["education", "school", "books", "courses", "tuition"],
-                "other": ["other", "misc", "miscellaneous"]
+        # Extract category from the message if any
+        category = None
+        category_keywords = {
+            "food": ["food", "groceries", "eating", "restaurant", "lunch", "dinner", "breakfast", "meals", "dining"],
+            "transport": ["transport", "transportation", "gas", "fuel", "bus", "train", "taxi", "grab", "car", "travel"],
+            "entertainment": ["entertainment", "movies", "games", "fun", "leisure", "cinema", "shows", "streaming"],
+            "shopping": ["shopping", "clothes", "items", "purchases", "mall", "store", "clothing", "fashion"],
+            "utilities": ["utilities", "bills", "electricity", "water", "internet", "phone", "wifi"],
+            "housing": ["housing", "rent", "mortgage", "home", "apartment", "house"],
+            "healthcare": ["healthcare", "medical", "health", "doctor", "hospital", "medicine"],
+            "education": ["education", "school", "books", "courses", "tuition", "learning"],
+            "other": ["other", "misc", "miscellaneous", "everything else"]
+        }
+        
+        input_lower = input_text.lower()
+        for cat, keywords in category_keywords.items():
+            for keyword in keywords:
+                if keyword in input_lower:
+                    category = cat
+                    break
+            if category:
+                break
+        
+        if category:
+            # Found a category in the initial request
+            st.session_state.budget_conversation = {
+                "stage": "ask_amount",
+                "category": category
             }
             
-            input_lower = input_text.lower()
-            for cat, keywords in category_keywords.items():
-                for keyword in keywords:
-                    if keyword in input_lower:
-                        category = cat
-                        break
-                if category:
-                    break
+            category_tips = {
+                "food": "Great choice! Food budgeting helps with meal planning and reduces food waste. 🍽️",
+                "transport": "Smart thinking! Transport costs can really add up quickly. 🚗",
+                "entertainment": "Excellent! It's important to budget for fun while staying responsible. 🎬",
+                "shopping": "Good idea! Shopping budgets help prevent impulse purchases. 🛍️",
+                "utilities": "Very practical! Utility budgets help with monthly planning. 💡",
+                "housing": "Essential! Housing is usually the biggest expense category. 🏠",
+                "healthcare": "Wise choice! Health expenses can be unpredictable. ⚕️",
+                "education": "Fantastic! Investing in learning is always worthwhile. 📚",
+                "other": "Good thinking! It's smart to budget for miscellaneous expenses. 📦"
+            }
             
-            if category:
-                # Found a category in the initial request
-                st.session_state.budget_conversation = {
-                    "stage": "ask_amount",
-                    "category": category
-                }
-                return f"Sure! How much would you like to budget for {category.title()}? (e.g., RM500)"
-            else:
-                # No category found, ask for it
-                st.session_state.budget_conversation = {"stage": "ask_category"}
-                return "Which category would you like to set a budget for? (Food, Transport, Entertainment, Shopping, Utilities, Housing, Healthcare, Education, Other)"
+            tip = category_tips.get(category, "Excellent choice for budgeting! 💰")
+            
+            return f"**{category.title()} Budget Setup** 🎯\n\n{tip}\n\nNow, what's a realistic monthly amount you'd like to set aside for {category.title()}? Think about your typical spending in this area.\n\nJust tell me the amount - for example:\n• **'500'** for RM500\n• **'75.50'** for RM75.50\n\nWhat feels right to you? 💭"
+        else:
+            # No category found, ask for it
+            st.session_state.budget_conversation = {"stage": "ask_category"}
+            return "I'm so excited to help you set up a budget! 🎉 This is going to make such a difference in managing your money!\n\n**Which spending category would you like to start with?** Here are your options:\n\n🍽️ **Food** - groceries, restaurants, takeout\n🚗 **Transport** - gas, public transport, parking\n🎬 **Entertainment** - movies, games, subscriptions\n🛍️ **Shopping** - clothes, personal items\n💡 **Utilities** - electricity, water, internet, phone\n🏠 **Housing** - rent, mortgage payments\n⚕️ **Healthcare** - medical expenses, medicine\n📚 **Education** - books, courses, training\n📦 **Other** - miscellaneous expenses\n\nJust tell me which category you'd like to focus on first! I'll walk you through everything step by step. 😊"
     
-    # Handle responses in the middle of budget conversation
-    # Replace the entire budget conversation section with this more robust version:
-
-    # In the budget conversation section, replace the category detection part with this:
-
-    # Handle responses in the middle of budget conversation
-    # Handle responses in the middle of budget conversation
-    # Handle responses in the middle of budget conversation
-    elif "budget_conversation" in st.session_state:
-        stage = st.session_state.budget_conversation["stage"]
+    # Handle budget query requests with the fixed version from before
+    elif intent_tag == "budget_query":
         input_lower = input_text.lower()
         
-        # First, check if user wants to cancel or change their mind
-        cancel_words = ["cancel", "stop", "nevermind", "never mind", "forget it", "change mind"]
-        if any(word in input_lower for word in cancel_words):
-            del st.session_state.budget_conversation
-            return "Okay, cancelled the budget setting. What would you like to do instead?"
-        
-        # Check if user is trying to specify a different category
-        category_keywords = {
-            "food": ["food", "grocery", "restaurant", "lunch", "dinner", "breakfast"],
-            "transport": ["transport", "bus", "train", "taxi", "grab", "gas", "fuel"],
-            "entertainment": ["entertainment", "movie", "cinema", "game", "fun"],
-            "shopping": ["shopping", "clothes", "mall", "store"],
-            "utilities": ["utilities", "bill", "electric", "water", "internet"],
-            "housing": ["housing", "rent", "mortgage", "home"],
-            "healthcare": ["healthcare", "medical", "doctor", "hospital"],
-            "education": ["education", "school", "book", "tuition"],
-            "other": ["other", "misc"]
-        }
-        
-        detected_category = None
-        for category, keywords in category_keywords.items():
-            for keyword in keywords:
-                if keyword in input_lower:
-                    detected_category = category
-                    break
-            if detected_category:
-                break
-        
-        # If user specified a new category during the conversation AND it's clearly a change request
-        if detected_category and is_category_change_request(input_lower):
-            if stage == "ask_amount":
-                # User changed their mind about category
-                st.session_state.budget_conversation["category"] = detected_category
-                return f"Okay, changed to {detected_category.title()}. How much would you like to budget for {detected_category.title()}? (e.g., RM500)"
-            elif stage == "confirm":
-                # User changed their mind during confirmation
-                st.session_state.budget_conversation["category"] = detected_category
-                st.session_state.budget_conversation["stage"] = "ask_amount"
-                return f"Okay, changed to {detected_category.title()}. How much would you like to budget for {detected_category.title()}? (e.g., RM500)"
-            else:
-                # If we're in ask_category stage but user specified a category, use it
-                st.session_state.budget_conversation["category"] = detected_category
-                st.session_state.budget_conversation["stage"] = "ask_amount"
-                return f"Sure! How much would you like to budget for {detected_category.title()}? (e.g., RM500)"
-        
-        # Normal conversation flow
-        if stage == "ask_category":
-            # User is providing a category
-            category = input_text.lower().strip()
-            
-            # Simple category mapping
-            if "food" in category or "grocery" in category or "restaurant" in category:
-                selected_category = "food"
-            elif "transport" in category or "bus" in category or "train" in category or "taxi" in category:
-                selected_category = "transport"
-            elif "entertainment" in category or "movie" in category or "game" in category:
-                selected_category = "entertainment"
-            elif "shopping" in category or "clothes" in category or "mall" in category:
-                selected_category = "shopping"
-            elif "utilities" in category or "bill" in category or "electric" in category:
-                selected_category = "utilities"
-            elif "housing" in category or "rent" in category or "mortgage" in category:
-                selected_category = "housing"
-            elif "health" in category or "medical" in category or "doctor" in category:
-                selected_category = "healthcare"
-            elif "education" in category or "school" in category or "book" in category:
-                selected_category = "education"
-            else:
-                selected_category = "other"
-            
-            # Store the category and move to next stage
-            st.session_state.budget_conversation["category"] = selected_category
-            st.session_state.budget_conversation["stage"] = "ask_amount"
-            return f"Sure! How much would you like to budget for {selected_category.title()}? (e.g., RM500)"
-        
-        elif stage == "ask_amount":
-            # User is responding with an amount
-            amount_match = re.search(r"(\d+\.?\d*)", input_text)
-            if amount_match:
-                try:
-                    amount = float(amount_match.group(1))
-                    # Store the amount and move to confirmation stage
-                    st.session_state.budget_conversation["amount"] = amount
-                    st.session_state.budget_conversation["stage"] = "confirm"
-                    
-                    category = st.session_state.budget_conversation["category"]
-                    return f"Confirm: Set budget of RM{amount:.2f} for {category.title()}? Type 'YES' to confirm or 'NO' to cancel."
-                except ValueError:
-                    return "I couldn't understand that amount. Please provide a number like '500' or '500.50'."
-            else:
-                # If no amount found, check if user wants to change category
-                if "change" in input_lower or "different" in input_lower:
-                    st.session_state.budget_conversation["stage"] = "ask_category"
-                    return "Which category would you like to set a budget for instead? (Food, Transport, Entertainment, Shopping, Utilities, Housing, Healthcare, Education, Other)"
-                else:
-                    # If it's not a category change and not an amount, process as normal query
-                    intent_tag, confidence = predict_intent(input_text, intents)
-                    return get_response(intent_tag, input_text, user_email)
-        
-        elif stage == "confirm":
-            # User is confirming the budget
-            if input_text.lower() in ["yes", "y", "confirm", "ok"]:
-                # Get the budget details
-                category = st.session_state.budget_conversation["category"]
-                amount = st.session_state.budget_conversation["amount"]
-                month = datetime.now().strftime("%B")
-                year = datetime.now().year
-                
-                # Set the budget
-                success = set_budget(user_email, category, amount, month, year)
-                
-                # Clear the conversation state
-                del st.session_state.budget_conversation
-                
-                if success:
-                    return f"Great! ✅ I've set your budget for {category.title()} to RM{amount:.2f} for {month} {year}."
-                else:
-                    return "Sorry, I couldn't set that budget. Please try again."
-            
-            elif input_text.lower() in ["no", "n", "cancel"]:
-                # Clear the conversation state
-                del st.session_state.budget_conversation
-                return "Budget setting cancelled. What would you like to do instead?"
-            
-            else:
-                # Check if user wants to change amount or category during confirmation
-                if "change amount" in input_lower or "different amount" in input_lower:
-                    st.session_state.budget_conversation["stage"] = "ask_amount"
-                    return f"How much would you like to budget for {st.session_state.budget_conversation['category'].title()} instead?"
-                elif "change category" in input_lower or "different category" in input_lower:
-                    st.session_state.budget_conversation["stage"] = "ask_category"
-                    return "Which category would you like to set a budget for instead? (Food, Transport, Entertainment, Shopping, Utilities, Housing, Healthcare, Education, Other)"
-                else:
-                    # If it's not a clear response, process as normal query
-                    intent_tag, confidence = predict_intent(input_text, intents)
-                    return get_response(intent_tag, input_text, user_email)
-            
-                # Handle budget query requests
-        # Handle budget query requests - ENHANCED VERSION
-    if intent_tag == "budget_query":
-        input_lower = input_text.lower()
-        
-        # Check if user wants a specific category
-        category_keywords = {
-            "food": ["food", "grocery", "eating", "restaurant"],
-            "transport": ["transport", "bus", "train", "taxi", "gas", "fuel"],
-            "entertainment": ["entertainment", "movie", "game", "fun"],
-            "shopping": ["shopping", "clothes", "mall", "store"],
-            "utilities": ["utilities", "bill", "electric", "water", "internet"],
-            "housing": ["housing", "rent", "mortgage", "home"],
-            "healthcare": ["healthcare", "medical", "doctor", "hospital"],
-            "education": ["education", "school", "book", "tuition"]
-        }
-        
+        # IMPROVED category detection with more precise matching
         specific_category = None
-        for category, keywords in category_keywords.items():
-            for keyword in keywords:
-                if keyword in input_lower:
-                    specific_category = category
-                    break
-            if specific_category:
-                break
         
-        # Check if user wants all budgets
-        all_keywords = ["all", "every", "each", "overview", "summary", "show my budget", "check my budget", "my budgets"]
-        show_all = any(keyword in input_lower for keyword in all_keywords)
+        # Check for specific category mentions with exact word boundaries
+        if any(word in input_lower for word in ["food budget", "my food", "food spending"]):
+            specific_category = "food"
+        elif any(word in input_lower for word in ["transport budget", "my transport", "transport spending", "transportation budget"]):
+            specific_category = "transport"
+        elif any(word in input_lower for word in ["entertainment budget", "my entertainment", "entertainment spending"]):
+            specific_category = "entertainment"
+        elif any(word in input_lower for word in ["shopping budget", "my shopping", "shopping spending"]):
+            specific_category = "shopping"
+        elif any(word in input_lower for word in ["utilities budget", "my utilities", "utilities spending", "utility budget"]):
+            specific_category = "utilities"
+        elif any(word in input_lower for word in ["housing budget", "my housing", "housing spending", "rent budget", "mortgage budget"]):
+            specific_category = "housing"
+        elif any(word in input_lower for word in ["healthcare budget", "my healthcare", "healthcare spending", "health budget", "medical budget"]):
+            specific_category = "healthcare"
+        elif any(word in input_lower for word in ["education budget", "my education", "education spending", "school budget"]):
+            specific_category = "education"
+        elif any(word in input_lower for word in ["other budget", "my other", "other spending", "misc budget"]):
+            specific_category = "other"
+        
+        # Check if user wants ALL budgets (improved detection)
+        show_all_patterns = [
+            "show my budget", "show all budget", "show my all budget", 
+            "what is my budget", "what's my budget", "my budget",
+            "check my budget", "view my budget", "budget overview",
+            "budget status", "how's my budget", "all my budgets"
+        ]
+        
+        show_all = any(pattern in input_lower for pattern in show_all_patterns)
+        
+        # If we found a specific category mention AND it's not a "show all" request
+        if specific_category and not show_all:
+            # Make sure it's really asking about that specific category
+            category_specific_phrases = [
+                f"{specific_category} budget", f"my {specific_category}", 
+                f"{specific_category} spending", f"how my {specific_category}"
+            ]
+            
+            # Double-check that the input is actually asking about this specific category
+            if not any(phrase in input_lower for phrase in category_specific_phrases):
+                specific_category = None
+                show_all = True
         
         # Get current month and year
         current_month = datetime.now().strftime("%B")
@@ -1514,12 +1539,12 @@ def process_user_input(input_text, user_email):
         spending = get_spending_by_category(user_email, current_month, current_year)
         
         if not budgets:
-            return "No budgets set up yet. You can set a budget by saying something like 'Set a RM500 budget for food'."
+            return f"Hey there! 😊 I don't see any budgets set up yet, but that's totally fine - everyone starts somewhere!\n\n🚀 **Ready to create your first budget?** It's one of the smartest financial moves you can make!\n\nI can help you set up budgets for:\n• Food & Dining 🍽️\n• Transportation 🚗\n• Entertainment 🎬\n• Shopping 🛍️\n• Utilities 💡\n• Housing 🏠\n• Healthcare ⚕️\n• Education 📚\n• Other expenses 📦\n\nJust say something like **'set a budget for food'** and I'll walk you through it step by step! Want to give it a try? 💪"
         
         budget_text = ""
         
         if specific_category and not show_all:
-            # Show specific category budget - format like Budget Tracking page
+            # Show specific category budget
             found_budget = False
             for budget in budgets:
                 if budget["category"] == specific_category:
@@ -1528,24 +1553,49 @@ def process_user_input(input_text, user_email):
                     remaining = budget_amount - spent
                     percent_used = (spent / budget_amount) * 100 if budget_amount > 0 else 0
                     
-                    status = "🟢 Good" if percent_used < 80 else "🟠 Watch" if percent_used < 100 else "🔴 Over"
+                    # Super personalized status messages
+                    if percent_used < 50:
+                        status = "🟢 Excellent!"
+                        status_msg = "You're doing fantastic! You've only used {:.1f}% of your budget. Keep up the great work! 🌟".format(percent_used)
+                    elif percent_used < 80:
+                        status = "🟢 Going Strong!"
+                        status_msg = "You're doing really well! {:.1f}% used - you're on a great track! 👍".format(percent_used)
+                    elif percent_used < 95:
+                        status = "🟠 Getting Close"
+                        status_msg = "Heads up! You're at {:.1f}% of your budget. Maybe watch the spending a bit? 👀".format(percent_used)
+                    elif percent_used < 100:
+                        status = "🟠 Almost There"
+                        status_msg = "You're at {:.1f}% - almost at your limit! Just RM{:.2f} left to stay on budget. 🎯".format(percent_used, remaining)
+                    else:
+                        over_amount = spent - budget_amount
+                        status = "🔴 Over Budget"
+                        status_msg = "You're RM{:.2f} over your budget, but don't worry! This happens to everyone. Want help adjusting your budget or finding ways to cut back? 💪".format(over_amount)
                     
-                    budget_text = f"**{specific_category.title()} Budget for {current_month} {current_year}:**\n\n"
-                    budget_text += f"• **Budget**: RM{budget_amount:.2f}\n"
-                    budget_text += f"• **Spent**: RM{spent:.2f}\n"
-                    budget_text += f"• **Remaining**: RM{remaining:.2f}\n"
-                    budget_text += f"• **Used**: {percent_used:.1f}%\n"
-                    budget_text += f"• **Status**: {status}\n"
+                    budget_text = f"**Your {specific_category.title()} Budget for {current_month} {current_year}** 📊\n\n"
+                    budget_text += f"💰 **Budget Set**: RM{budget_amount:.2f}\n"
+                    budget_text += f"💸 **Spent So Far**: RM{spent:.2f}\n"
+                    budget_text += f"🏦 **Remaining**: RM{remaining:.2f}\n"
+                    budget_text += f"📈 **Percentage Used**: {percent_used:.1f}%\n"
+                    budget_text += f"🎯 **Status**: {status}\n\n"
+                    budget_text += f"💬 **My Take**: {status_msg}\n\n"
+                    
+                    if percent_used < 100:
+                        budget_text += f"🎉 **You're doing great!** Want to check other budgets or set up new ones?"
+                    else:
+                        budget_text += f"💡 **Tip**: Consider adjusting your budget or looking for ways to save in this category!"
+                    
                     found_budget = True
                     break
             
             if not found_budget:
-                budget_text = f"No budget set for {specific_category.title()} yet. You can set one by saying 'Set a budget for {specific_category}'."
+                budget_text = f"🤔 **Hmm!** I don't see a budget set up for **{specific_category.title()}** yet!\n\nWould you like me to help you create one? It's super easy - just say **'set a budget for {specific_category}'** and I'll walk you through it!\n\nSetting up budgets for all your spending categories is one of the best ways to stay on top of your finances! 💪"
         else:
-            # Show all budgets - format like Budget Tracking page
-            budget_text = f"**Your Current Budgets for {current_month} {current_year}:**\n\n"
+            # Show all budgets - (same as before, but ensuring it shows ALL budgets)
+            budget_text = f"**Your Complete Budget Overview for {current_month} {current_year}** 📊✨\n\n"
             total_budget = 0
             total_spent = 0
+            good_count = 0
+            over_count = 0
             
             for budget in budgets:
                 category_name = budget["category"]
@@ -1554,32 +1604,64 @@ def process_user_input(input_text, user_email):
                 remaining = budget_amount - spent
                 percent_used = (spent / budget_amount) * 100 if budget_amount > 0 else 0
                 
-                status = "🟢 Good" if percent_used < 80 else "🟠 Watch" if percent_used < 100 else "🔴 Over"
+                if percent_used < 80:
+                    status = "🟢"
+                    good_count += 1
+                elif percent_used < 100:
+                    status = "🟠"
+                else:
+                    status = "🔴"
+                    over_count += 1
                 
-                budget_text += f"**{category_name.title()}**\n"
-                budget_text += f"• Budget: RM{budget_amount:.2f} | Spent: RM{spent:.2f} | Remaining: RM{remaining:.2f}\n"
-                budget_text += f"• Used: {percent_used:.1f}% | Status: {status}\n\n"
+                budget_text += f"**{category_name.title()}** {status}\n"
+                budget_text += f"├ Budget: RM{budget_amount:.2f} | Spent: RM{spent:.2f} | Left: RM{remaining:.2f}\n"
+                budget_text += f"└ {percent_used:.1f}% used\n\n"
                 
                 total_budget += budget_amount
                 total_spent += spent
             
-            # Add totals
+            # Enhanced overall summary with personality
             total_remaining = total_budget - total_spent
             total_percent = (total_spent / total_budget) * 100 if total_budget > 0 else 0
-            budget_text += f"**Summary:**\n"
+            
+            budget_text += f"📋 **Overall Summary:**\n"
             budget_text += f"• Total Budget: RM{total_budget:.2f}\n"
             budget_text += f"• Total Spent: RM{total_spent:.2f} ({total_percent:.1f}%)\n"
-            budget_text += f"• Total Remaining: RM{total_remaining:.2f}"
+            budget_text += f"• Total Remaining: RM{total_remaining:.2f}\n\n"
+            
+            # Personalized overall assessment
+            if total_percent < 60:
+                overall_msg = "🌟 **Outstanding!** You're absolutely crushing your budget goals! You've only used {:.1f}% of your total budget. This level of discipline is incredible! 🏆".format(total_percent)
+            elif total_percent < 80:
+                overall_msg = "👍 **Excellent work!** You're doing really well with {:.1f}% of your budget used. Keep up this fantastic pace! 💪".format(total_percent)
+            elif total_percent < 95:
+                overall_msg = "😊 **Good progress!** You're at {:.1f}% of your total budget. You're managing your money well! 📈".format(total_percent)
+            elif total_percent < 100:
+                overall_msg = "⚠️ **Almost there!** You're at {:.1f}% - just RM{:.2f} left to stay within budget. You've got this! 🎯".format(total_percent, total_remaining)
+            else:
+                over_amount = total_spent - total_budget
+                overall_msg = "💪 **Over budget by RM{:.2f}** - but hey, this happens! Don't be hard on yourself. Want to discuss adjusting your budgets or finding savings opportunities? I'm here to help! 🤝".format(over_amount)
+            
+            budget_text += f"💬 **My Assessment**: {overall_msg}\n\n"
+            
+            # Action suggestions
+            if good_count == len(budgets):
+                budget_text += f"🎉 You're doing amazing across all categories! Maybe consider setting up budgets for other areas?"
+            elif over_count > 0:
+                budget_text += f"💡 **Suggestion**: Focus on the categories marked 🔴 - I can help you find ways to save or adjust those budgets!"
+            else:
+                budget_text += f"🚀 **Keep it up!** You're managing your money like a pro!"
+            
+            budget_text += f"\n\nNeed help with any specific budget or want to add new ones? Just let me know! 😊"
         
         return budget_text
-
+    
     # Get response based on intent for all other intents
     try:
-    # Use get_response to handle regular intents
         return get_response(intent_tag, input_text, user_email)
     except Exception as e:
         st.error(f"Error generating response: {str(e)}")
-    return "I'm having trouble understanding that. Could you try rephrasing your request?"
+        return "I'm having trouble understanding that. Could you try rephrasing your request?"
 
 # -------------------------------- UI Layout --------------------------------
 # Add a header
