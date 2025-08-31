@@ -143,12 +143,65 @@ def init_db():
         year INTEGER
     )
     ''')
+
+        # Create goals table
+    c.execute('''
+    CREATE TABLE IF NOT EXISTS goals (
+        id INTEGER PRIMARY KEY,
+        user_email TEXT,
+        goal_name TEXT,
+        goal_type TEXT,
+        target_amount REAL,
+        current_amount REAL DEFAULT 0,
+        target_date TEXT,
+        monthly_contribution REAL DEFAULT 0,
+        created_date TEXT,
+        status TEXT DEFAULT 'active',
+        goal_details TEXT DEFAULT '{}'
+    )
+    ''')
+    
+    # Create goal_contributions table
+    c.execute('''
+    CREATE TABLE IF NOT EXISTS goal_contributions (
+        id INTEGER PRIMARY KEY,
+        goal_id INTEGER,
+        user_email TEXT,
+        amount REAL,
+        contribution_date TEXT,
+        note TEXT,
+        FOREIGN KEY (goal_id) REFERENCES goals (id)
+    )
+    ''')
     
     conn.commit()
     conn.close()
 
 # Call init_db to ensure tables exist
 init_db()
+
+def update_database_schema():
+    """Update existing database to include goal_details column"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        
+        # Check if goal_details column exists
+        c.execute("PRAGMA table_info(goals)")
+        columns = [column[1] for column in c.fetchall()]
+        
+        if 'goal_details' not in columns:
+            # Add the new column
+            c.execute("ALTER TABLE goals ADD COLUMN goal_details TEXT DEFAULT '{}'")
+            conn.commit()
+            print("Database updated with goal_details column")
+        
+        conn.close()
+    except Exception as e:
+        print(f"Error updating database: {e}")
+
+# Call this function after init_db()
+update_database_schema()  # Add this line right after init_db()
 
 # ---------------------------- Login/SignUp Functions ----------------------------
 # Function to validate email format
@@ -397,6 +450,498 @@ def get_budget_status(user_email, category=None, month=None, year=None):
         budget_text += f"**Totals:** RM{total_spent:.2f} of RM{total_budget:.2f} ({total_percent:.1f}%) spent, RM{total_remaining:.2f} remaining"
     
     return budget_text
+
+# -------------------------------- Goals Functions -------------------------------
+
+def add_goal(user_email, goal_name, goal_type, target_amount, target_date, monthly_contribution=0, goal_details=None):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        created_date = datetime.now().strftime("%Y-%m-%d")
+        
+        # Convert goal_details to JSON string
+        details_json = json.dumps(goal_details or {})
+        
+        c.execute("""
+            INSERT INTO goals (user_email, goal_name, goal_type, target_amount, 
+                             target_date, monthly_contribution, created_date, goal_details) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (user_email, goal_name, goal_type, target_amount, target_date, monthly_contribution, created_date, details_json))
+        goal_id = c.lastrowid
+        conn.commit()
+        conn.close()
+        return True, goal_id
+    except Exception as e:
+        st.error(f"Error adding goal: {str(e)}")
+        return False, None
+
+def get_user_goals(user_email):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT * FROM goals WHERE user_email = ? AND status = 'active' ORDER BY created_date DESC", (user_email,))
+    goals = c.fetchall()
+    conn.close()
+    
+    goal_list = []
+    for goal in goals:
+        # Handle both old goals (without goal_details) and new goals (with goal_details)
+        goal_details = "{}"
+        if len(goal) > 10:  # New format with goal_details
+            goal_details = goal[10] or "{}"
+        
+        try:
+            parsed_details = json.loads(goal_details)
+        except:
+            parsed_details = {}
+        
+        goal_list.append({
+            "id": goal[0],
+            "goal_name": goal[2],
+            "goal_type": goal[3],
+            "target_amount": goal[4],
+            "current_amount": goal[5],
+            "target_date": goal[6],
+            "monthly_contribution": goal[7],
+            "created_date": goal[8],
+            "status": goal[9],
+            "goal_details": parsed_details
+        })
+    
+    return goal_list
+
+def get_goal_details_form(goal_type):
+    """Generate form fields based on goal type"""
+    details = {}
+    
+    if goal_type == "car":
+        st.subheader("🚗 Car Details")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            details["brand"] = st.selectbox("Car Brand", [
+                "Toyota", "Honda", "Mercedes-Benz", "BMW", "Audi", "Volkswagen", 
+                "Nissan", "Hyundai", "Kia", "Mazda", "Subaru", "Mitsubishi",
+                "Lexus", "Infiniti", "Acura", "Genesis", "Volvo", "Jaguar",
+                "Land Rover", "Porsche", "Ferrari", "Lamborghini", "Bentley",
+                "Rolls-Royce", "McLaren", "Aston Martin", "Maserati", "Bugatti",
+                "Tesla", "Ford", "Chevrolet", "Dodge", "Jeep", "Cadillac",
+                "Lincoln", "Buick", "GMC", "Ram", "Chrysler", "Other"
+            ])
+            
+            if details["brand"] == "Toyota":
+                details["model"] = st.selectbox("Model", [
+                    "Camry", "Corolla", "RAV4", "Highlander", "Prius", "Sienna",
+                    "Tacoma", "Tundra", "4Runner", "Sequoia", "Land Cruiser",
+                    "Avalon", "Yaris", "C-HR", "Venza", "Mirai", "Supra", "Other"
+                ])
+            elif details["brand"] == "Honda":
+                details["model"] = st.selectbox("Model", [
+                    "Civic", "Accord", "CR-V", "Pilot", "Odyssey", "HR-V",
+                    "Passport", "Ridgeline", "Insight", "Clarity", "Fit",
+                    "CR-V Hybrid", "Accord Hybrid", "Other"
+                ])
+            elif details["brand"] == "Mercedes-Benz":
+                details["model"] = st.selectbox("Model", [
+                    "C-Class", "E-Class", "S-Class", "GLC", "GLE", "GLS",
+                    "A-Class", "CLA", "CLS", "G-Class", "GLA", "GLB",
+                    "AMG GT", "SL", "SLC", "Maybach", "Other"
+                ])
+            elif details["brand"] == "BMW":
+                details["model"] = st.selectbox("Model", [
+                    "3 Series", "5 Series", "7 Series", "X3", "X5", "X7",
+                    "1 Series", "2 Series", "4 Series", "6 Series", "8 Series",
+                    "X1", "X2", "X4", "X6", "Z4", "i3", "i4", "iX", "Other"
+                ])
+            else:
+                details["model"] = st.text_input("Model", placeholder="Enter car model")
+        
+        with col2:
+            details["year"] = st.selectbox("Year", list(range(2024, 2010, -1)) + ["Used (Older)", "New (Latest)"])
+            details["condition"] = st.selectbox("Condition", ["Brand New", "Used - Excellent", "Used - Good", "Used - Fair", "Certified Pre-Owned"])
+            details["transmission"] = st.selectbox("Transmission", ["Automatic", "Manual", "CVT", "No Preference"])
+            details["fuel_type"] = st.selectbox("Fuel Type", ["Gasoline", "Hybrid", "Electric", "Diesel", "Plug-in Hybrid"])
+            details["color_preference"] = st.text_input("Preferred Color", placeholder="e.g., White, Black, Silver")
+    
+    elif goal_type == "house":
+        st.subheader("🏠 House Details")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            details["property_type"] = st.selectbox("Property Type", [
+                "Single Family Home", "Condominium", "Townhouse", "Apartment",
+                "Duplex", "Villa", "Penthouse", "Studio", "Loft", "Other"
+            ])
+            details["bedrooms"] = st.selectbox("Bedrooms", ["1", "2", "3", "4", "5", "6+", "No Preference"])
+            details["bathrooms"] = st.selectbox("Bathrooms", ["1", "1.5", "2", "2.5", "3", "3.5", "4+", "No Preference"])
+            details["square_feet"] = st.text_input("Square Feet", placeholder="e.g., 1200, 2000")
+        
+        with col2:
+            details["location"] = st.text_input("Preferred Location", placeholder="e.g., Kuala Lumpur, Selangor")
+            details["parking"] = st.selectbox("Parking", ["No Parking", "1 Car", "2 Cars", "3+ Cars", "No Preference"])
+            details["amenities"] = st.multiselect("Desired Amenities", [
+                "Swimming Pool", "Gym", "Security", "Playground", "Garden",
+                "Balcony", "Elevator", "Air Conditioning", "Furnished"
+            ])
+            details["budget_type"] = st.selectbox("Budget Type", ["Down Payment Only", "Full Purchase Price"])
+    
+    elif goal_type == "vacation":
+        st.subheader("🏖️ Vacation Details")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            details["destination"] = st.text_input("Destination", placeholder="e.g., Japan, Europe, Bali")
+            details["duration"] = st.selectbox("Duration", [
+                "Weekend (2-3 days)", "Short Trip (4-7 days)", "Week Long (8-14 days)",
+                "Extended (15-30 days)", "Month+ (30+ days)"
+            ])
+            details["travel_style"] = st.selectbox("Travel Style", [
+                "Budget Backpacking", "Mid-range Comfort", "Luxury Travel",
+                "Business Travel", "Family Vacation", "Adventure Travel"
+            ])
+        
+        with col2:
+            details["travelers"] = st.selectbox("Number of Travelers", ["Solo", "Couple", "Family (3-4)", "Group (5+)"])
+            details["accommodation"] = st.selectbox("Accommodation Type", [
+                "Hostel", "Budget Hotel", "Mid-range Hotel", "Luxury Hotel",
+                "Resort", "Airbnb", "Vacation Rental", "Mix of Options"
+            ])
+            details["activities"] = st.multiselect("Planned Activities", [
+                "Sightseeing", "Food Tours", "Adventure Sports", "Beach Activities",
+                "Cultural Experiences", "Shopping", "Nightlife", "Photography",
+                "Museums", "Nature/Hiking", "Water Sports", "Local Tours"
+            ])
+    
+    elif goal_type == "electronics":
+        st.subheader("💻 Electronics Details")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            details["device_type"] = st.selectbox("Device Type", [
+                "Laptop", "Desktop Computer", "Smartphone", "Tablet",
+                "Gaming Console", "Smart TV", "Camera", "Headphones",
+                "Smartwatch", "Home Theater", "Other Electronics"
+            ])
+            
+            if details["device_type"] == "Laptop":
+                details["brand"] = st.selectbox("Brand", [
+                    "Apple MacBook", "Dell", "HP", "Lenovo", "ASUS", "Acer",
+                    "MSI", "Razer", "Microsoft Surface", "Samsung", "Other"
+                ])
+                details["usage"] = st.selectbox("Primary Use", [
+                    "General Use", "Gaming", "Professional Work", "Creative Work",
+                    "Programming", "Business", "Student Use"
+                ])
+            elif details["device_type"] == "Smartphone":
+                details["brand"] = st.selectbox("Brand", [
+                    "iPhone", "Samsung Galaxy", "Google Pixel", "OnePlus",
+                    "Xiaomi", "Huawei", "Oppo", "Vivo", "Nothing", "Other"
+                ])
+                details["storage"] = st.selectbox("Storage", ["64GB", "128GB", "256GB", "512GB", "1TB"])
+            elif details["device_type"] == "Gaming Console":
+                details["brand"] = st.selectbox("Console", [
+                    "PlayStation 5", "Xbox Series X", "Xbox Series S", "Nintendo Switch",
+                    "Steam Deck", "Gaming PC", "VR Headset", "Other"
+                ])
+        
+        with col2:
+            details["budget_range"] = st.selectbox("Budget Range", [
+                "Under RM1,000", "RM1,000 - RM3,000", "RM3,000 - RM5,000",
+                "RM5,000 - RM10,000", "Over RM10,000"
+            ])
+            details["priority_features"] = st.multiselect("Priority Features", [
+                "Performance", "Battery Life", "Display Quality", "Camera Quality",
+                "Storage Space", "Build Quality", "Brand Reputation", "Latest Model"
+            ])
+            details["purchase_timing"] = st.selectbox("Purchase Timing", [
+                "As soon as possible", "Wait for sale/discount", "When new model releases",
+                "Specific date", "When goal is reached"
+            ])
+    
+    elif goal_type == "wedding":
+        st.subheader("💍 Wedding Details")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            details["wedding_style"] = st.selectbox("Wedding Style", [
+                "Traditional", "Modern", "Destination Wedding", "Garden Wedding",
+                "Beach Wedding", "Church Wedding", "Intimate Ceremony",
+                "Grand Celebration", "Cultural/Religious", "Themed Wedding"
+            ])
+            details["guest_count"] = st.selectbox("Expected Guests", [
+                "Small (20-50)", "Medium (51-100)", "Large (101-200)",
+                "Very Large (201-300)", "Grand (300+)"
+            ])
+            details["venue_type"] = st.selectbox("Venue Type", [
+                "Hotel Ballroom", "Outdoor Garden", "Beach Resort", "Church/Temple",
+                "Restaurant", "Country Club", "Banquet Hall", "Home/Private Property",
+                "Destination Venue", "Other"
+            ])
+        
+        with col2:
+            details["budget_includes"] = st.multiselect("Budget Includes", [
+                "Venue Rental", "Catering", "Photography/Videography", "Decorations",
+                "Wedding Dress/Suit", "Rings", "Entertainment/Music", "Flowers",
+                "Transportation", "Honeymoon", "Gifts/Favors", "Other Expenses"
+            ])
+            details["wedding_date"] = st.selectbox("Planned Timeline", [
+                "Within 6 months", "6-12 months", "1-2 years", "2+ years", "Not decided yet"
+            ])
+            details["priority_elements"] = st.multiselect("Most Important Elements", [
+                "Venue", "Food & Catering", "Photography", "Entertainment",
+                "Decorations", "Wedding Dress", "Guest Experience", "Honeymoon"
+            ])
+    
+    elif goal_type == "education":
+        st.subheader("🎓 Education Details")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            details["education_type"] = st.selectbox("Education Type", [
+                "University Degree", "Master's Degree", "PhD", "Professional Certification",
+                "Online Course", "Bootcamp", "Trade School", "Language Course",
+                "Professional Development", "Skill Training", "Other"
+            ])
+            details["field_of_study"] = st.text_input("Field of Study", placeholder="e.g., Computer Science, MBA, Data Science")
+            details["institution_type"] = st.selectbox("Institution Preference", [
+                "Local University", "International University", "Online Platform",
+                "Private Institution", "Government Institution", "No Preference"
+            ])
+        
+        with col2:
+            details["duration"] = st.selectbox("Program Duration", [
+                "Short Course (1-6 months)", "Certificate (6-12 months)",
+                "Diploma (1-2 years)", "Degree (3-4 years)", "Master's (1-2 years)",
+                "PhD (3-5 years)", "Ongoing/Flexible"
+            ])
+            details["study_mode"] = st.selectbox("Study Mode", [
+                "Full-time", "Part-time", "Online", "Hybrid", "Weekend Classes", "Evening Classes"
+            ])
+            details["budget_covers"] = st.multiselect("Budget Covers", [
+                "Tuition Fees", "Books & Materials", "Living Expenses",
+                "Transportation", "Technology/Equipment", "Exam Fees", "Other Costs"
+            ])
+    
+    elif goal_type == "emergency_fund":
+        st.subheader("💰 Emergency Fund Details")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            details["target_months"] = st.selectbox("Target Coverage", [
+                "3 months expenses", "6 months expenses", "9 months expenses",
+                "12 months expenses", "18 months expenses", "24+ months expenses"
+            ])
+            details["monthly_expenses"] = st.number_input("Current Monthly Expenses (RM)", min_value=0.0, format="%.2f")
+            details["fund_purpose"] = st.multiselect("Emergency Fund For", [
+                "Job Loss", "Medical Emergencies", "Car Repairs", "Home Repairs",
+                "Family Emergencies", "Economic Uncertainty", "General Security"
+            ])
+        
+        with col2:
+            details["storage_preference"] = st.selectbox("Storage Preference", [
+                "High-yield Savings Account", "Money Market Account", "Fixed Deposit",
+                "Mix of Accounts", "Accessible Investment", "Not Sure Yet"
+            ])
+            details["access_priority"] = st.selectbox("Access Priority", [
+                "Immediate Access", "24-48 hour access", "Weekly access", "Not concerned"
+            ])
+    
+    return details
+
+def format_goal_details_display(goal):
+    """Format goal details for display"""
+    if not goal.get("goal_details"):
+        return ""
+    
+    details = goal["goal_details"]
+    goal_type = goal["goal_type"]
+    
+    if goal_type == "car" and details:
+        display = f"🚗 **Car Details:**\n"
+        if details.get("brand"): display += f"• Brand: {details['brand']}\n"
+        if details.get("model"): display += f"• Model: {details['model']}\n"
+        if details.get("year"): display += f"• Year: {details['year']}\n"
+        if details.get("condition"): display += f"• Condition: {details['condition']}\n"
+        if details.get("color_preference"): display += f"• Preferred Color: {details['color_preference']}\n"
+        return display
+    
+    elif goal_type == "house" and details:
+        display = f"🏠 **House Details:**\n"
+        if details.get("property_type"): display += f"• Type: {details['property_type']}\n"
+        if details.get("bedrooms"): display += f"• Bedrooms: {details['bedrooms']}\n"
+        if details.get("bathrooms"): display += f"• Bathrooms: {details['bathrooms']}\n"
+        if details.get("location"): display += f"• Location: {details['location']}\n"
+        if details.get("amenities"): display += f"• Amenities: {', '.join(details['amenities'])}\n"
+        return display
+    
+    elif goal_type == "vacation" and details:
+        display = f"🏖️ **Vacation Details:**\n"
+        if details.get("destination"): display += f"• Destination: {details['destination']}\n"
+        if details.get("duration"): display += f"• Duration: {details['duration']}\n"
+        if details.get("travelers"): display += f"• Travelers: {details['travelers']}\n"
+        if details.get("travel_style"): display += f"• Style: {details['travel_style']}\n"
+        if details.get("activities"): display += f"• Activities: {', '.join(details['activities'][:3])}{'...' if len(details['activities']) > 3 else ''}\n"
+        return display
+    
+    elif goal_type == "electronics" and details:
+        display = f"💻 **Electronics Details:**\n"
+        if details.get("device_type"): display += f"• Device: {details['device_type']}\n"
+        if details.get("brand"): display += f"• Brand: {details['brand']}\n"
+        if details.get("usage"): display += f"• Primary Use: {details['usage']}\n"
+        if details.get("budget_range"): display += f"• Budget Range: {details['budget_range']}\n"
+        return display
+    
+    elif goal_type == "wedding" and details:
+        display = f"💍 **Wedding Details:**\n"
+        if details.get("wedding_style"): display += f"• Style: {details['wedding_style']}\n"
+        if details.get("guest_count"): display += f"• Guests: {details['guest_count']}\n"
+        if details.get("venue_type"): display += f"• Venue: {details['venue_type']}\n"
+        if details.get("wedding_date"): display += f"• Timeline: {details['wedding_date']}\n"
+        return display
+    
+    elif goal_type == "education" and details:
+        display = f"🎓 **Education Details:**\n"
+        if details.get("education_type"): display += f"• Type: {details['education_type']}\n"
+        if details.get("field_of_study"): display += f"• Field: {details['field_of_study']}\n"
+        if details.get("duration"): display += f"• Duration: {details['duration']}\n"
+        if details.get("study_mode"): display += f"• Mode: {details['study_mode']}\n"
+        return display
+    
+    elif goal_type == "emergency_fund" and details:
+        display = f"💰 **Emergency Fund Details:**\n"
+        if details.get("target_months"): display += f"• Coverage: {details['target_months']}\n"
+        if details.get("monthly_expenses"): display += f"• Monthly Expenses: RM{details['monthly_expenses']:.2f}\n"
+        if details.get("storage_preference"): display += f"• Storage: {details['storage_preference']}\n"
+        return display
+    
+    return ""
+
+def add_goal_contribution(goal_id, user_email, amount, note=""):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        contribution_date = datetime.now().strftime("%Y-%m-%d")
+        
+        # Add contribution record
+        c.execute("""
+            INSERT INTO goal_contributions (goal_id, user_email, amount, contribution_date, note) 
+            VALUES (?, ?, ?, ?, ?)
+        """, (goal_id, user_email, amount, contribution_date, note))
+        
+        # Update goal current amount
+        c.execute("UPDATE goals SET current_amount = current_amount + ? WHERE id = ?", (amount, goal_id))
+        
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        st.error(f"Error adding contribution: {str(e)}")
+        return False
+
+def get_goal_progress(goal):
+    """Calculate goal progress with friendly status messages"""
+    target_amount = goal["target_amount"]
+    current_amount = goal["current_amount"]
+    target_date = datetime.strptime(goal["target_date"], "%Y-%m-%d")
+    today = datetime.now()
+    
+    # Calculate progress percentage
+    progress_percent = (current_amount / target_amount) * 100 if target_amount > 0 else 0
+    
+    # Calculate remaining amount and days
+    remaining_amount = target_amount - current_amount
+    days_remaining = (target_date - today).days
+    
+    # Calculate required monthly savings
+    months_remaining = max(1, days_remaining / 30.44)  # Average days per month
+    required_monthly = remaining_amount / months_remaining if months_remaining > 0 else remaining_amount
+    
+    # Determine friendly status messages
+    if progress_percent >= 100:
+        status = "🎉 Goal Achieved!"
+        status_msg = "Congratulations! You did it! 🏆"
+        status_color = "success"
+    elif days_remaining < 0:
+        status = "⏰ Past Due Date"
+        status_msg = "Don't worry! You can still reach this goal - maybe adjust the date? 💪"
+        status_color = "error"
+    elif progress_percent >= 90:
+        status = "🔥 Almost There!"
+        status_msg = "You're so close! Keep pushing - you've got this! 🌟"
+        status_color = "success"
+    elif progress_percent >= 75:
+        status = "🟢 Excellent Progress!"
+        status_msg = "You're doing fantastic! Stay consistent and you'll nail this! 👏"
+        status_color = "success"
+    elif progress_percent >= 50:
+        status = "🟡 Good Progress"
+        status_msg = "You're halfway there! Keep up the momentum! 📈"
+        status_color = "warning"
+    elif progress_percent >= 25:
+        status = "🟠 Getting Started"
+        status_msg = "Nice start! Every step counts towards your goal! 🚀"
+        status_color = "warning"
+    else:
+        status = "🔴 Just Beginning"
+        status_msg = "No worries! Every journey starts with a first step! Let's build momentum! 💫"
+        status_color = "error"
+    
+    return {
+        "progress_percent": min(100, progress_percent),
+        "remaining_amount": max(0, remaining_amount),
+        "days_remaining": days_remaining,
+        "months_remaining": months_remaining,
+        "required_monthly": required_monthly,
+        "status": status,
+        "status_msg": status_msg,
+        "status_color": status_color
+    }
+
+def get_goals_summary(user_email):
+    """Get friendly summary of all goals for chat responses"""
+    goals = get_user_goals(user_email)
+    if not goals:
+        return "Hey there! 😊 I don't see any goals set up yet, but that's totally fine - we all start somewhere!\n\n🎯 **Ready to turn your dreams into plans?** Setting financial goals is like having a roadmap to your future!\n\nI can help you save for anything:\n• 💰 Emergency fund (peace of mind!)\n• 🏖️ Amazing vacation\n• 🚗 That car you've been wanting\n• 🏠 Your dream home\n• 💻 Cool gadgets or tech\n• 🎓 Education or courses\n• 💍 Special occasions\n\nJust say **'set a goal'** and let's make your dreams happen! What do you say? ✨"
+    
+    summary = f"**Your Financial Goals Journey** 🎯✨\n\n"
+    
+    total_goals = len(goals)
+    completed_goals = sum(1 for goal in goals if get_goal_progress(goal)["progress_percent"] >= 100)
+    
+    # Add encouraging header
+    if completed_goals > 0:
+        summary += f"🏆 **Amazing!** You've completed {completed_goals} out of {total_goals} goals! You're a goal-crushing machine! 💪\n\n"
+    else:
+        summary += f"📈 **You're working on {total_goals} goal{'s' if total_goals > 1 else ''}!** Every step forward is progress! 🌟\n\n"
+    
+    for goal in goals:
+        progress = get_goal_progress(goal)
+        summary += f"**{goal['goal_name']}** ({goal['goal_type'].replace('_', ' ').title()})\n"
+        summary += f"├ Target: RM{goal['target_amount']:.2f}\n"
+        summary += f"├ Saved: RM{goal['current_amount']:.2f} ({progress['progress_percent']:.1f}%)\n"
+        summary += f"├ Remaining: RM{progress['remaining_amount']:.2f}\n"
+        summary += f"└ Status: {progress['status']}\n"
+        summary += f"  💭 {progress['status_msg']}\n\n"
+    
+    # Add motivational closing
+    summary += "🚀 **Keep going!** You're building an amazing financial future! Want to add money to any goal or create a new one? I'm here to help! 😊"
+    return summary
+
+def find_goal_by_name(user_email, goal_name_partial):
+    """Find goal by partial name match for contributions"""
+    goals = get_user_goals(user_email)
+    goal_name_lower = goal_name_partial.lower()
+    
+    # Try exact match first
+    for goal in goals:
+        if goal_name_lower == goal["goal_name"].lower():
+            return goal
+    
+    # Try partial match
+    for goal in goals:
+        if goal_name_lower in goal["goal_name"].lower() or goal["goal_name"].lower() in goal_name_lower:
+            return goal
+    
+    return None
 
 def is_category_change_request(text):
     """
@@ -1040,6 +1585,33 @@ def debug_intent_classification(input_text):
     # Enhanced budget query detection
     input_lower = input_text.lower()
     
+    # Check for GOAL intents first (ADD THIS SECTION)
+    goal_set_indicators = [
+        "set goal", "create goal", "new goal", "add goal", "save for", "saving goal",
+        "want to save", "financial goal", "savings target", "set savings goal",
+        "i want to save for", "help me save", "saving plan", "set target",
+        "create savings goal", "make a goal", "i want to set goal", "want to set goal"
+    ]
+    
+    goal_query_indicators = [
+        "show goals", "view goals", "check goals", "goal progress", "how are my goals",
+        "goals status", "my savings goals", "goal summary", "see goals", "what are my goals",
+        "goal overview", "show goals", "my goal", "all goals", "check goal progress"
+    ]
+    
+    goal_contribution_indicators = [
+        "add to goal", "contribute to goal", "save money for", "put money towards",
+        "add money to", "goal contribution", "save for my goal", "progress on goal"
+    ]
+    
+    # Check for goal intents
+    if any(indicator in input_lower for indicator in goal_set_indicators):
+        return "goal_set", 0.9
+    elif any(indicator in input_lower for indicator in goal_query_indicators):
+        return "goal_query", 0.9
+    elif any(indicator in input_lower for indicator in goal_contribution_indicators):
+        return "goal_contribution", 0.9
+    
     # Check if this should be budget_query instead of budget_set
     budget_query_indicators = [
         "show", "view", "check", "what is", "what's", "how is", "how's", 
@@ -1048,8 +1620,8 @@ def debug_intent_classification(input_text):
     ]
     
     budget_set_indicators = [
-        "set", "create", "make", "establish", "new", "setup", "allocate", 
-        "limit", "want to", "help me", "i need to"
+        "set budget", "create budget", "make budget", "establish budget", "new budget",
+        "setup budget", "allocate budget", "limit", "want to", "help me", "i need to"
     ]
     
     has_query_indicator = any(indicator in input_lower for indicator in budget_query_indicators)
@@ -1062,6 +1634,107 @@ def debug_intent_classification(input_text):
         intent_tag = "budget_set"
     
     return intent_tag, confidence
+
+# Helper function to create the goal with details (FIXED)
+def process_goal_creation():
+    """Process the final goal creation with all collected details"""
+    user_email = st.session_state.current_user  # Get user email
+    goal_name = st.session_state.goal_conversation["goal_name"]
+    amount = st.session_state.goal_conversation["amount"]
+    target_date = st.session_state.goal_conversation["target_date"]
+    goal_type = st.session_state.goal_conversation["goal_type"]
+    details = st.session_state.goal_conversation.get("details", {})
+    
+    target_date_str = target_date.strftime("%Y-%m-%d")
+    
+    success, goal_id = add_goal(user_email, goal_name, goal_type, amount, target_date_str, 0, details)
+    
+    # Clear conversation state
+    del st.session_state.goal_conversation
+    
+    if success:
+        # Calculate helpful information
+        today = datetime.now()
+        days_until = (target_date - today).days
+        months_until = max(1, days_until / 30.44)
+        monthly_suggestion = amount / months_until
+        weekly_suggestion = amount / (days_until / 7) if days_until > 0 else amount
+        
+        # Create detailed summary based on goal type and details
+        details_summary = ""
+        if goal_type == "car" and details:
+            if details.get("brand") and details.get("model"):
+                details_summary = f"\n🚗 **Your Dream Car**: {details['brand']} {details['model']}"
+                if details.get("condition"):
+                    details_summary += f" ({details['condition']})"
+        elif goal_type == "vacation" and details:
+            vacation_info = []
+            if details.get("destination"):
+                vacation_info.append(f"📍 Destination: {details['destination']}")
+            if details.get("duration"):
+                vacation_info.append(f"⏰ Duration: {details['duration']}")
+            if details.get("travel_style"):
+                vacation_info.append(f"✈️ Style: {details['travel_style']}")
+            if vacation_info:
+                details_summary = f"\n🏖️ **Trip Details**:\n" + "\n".join([f"• {info}" for info in vacation_info])
+        elif goal_type == "electronics" and details:
+            device_info = []
+            if details.get("device_type"):
+                device_info.append(f"📱 Device: {details['device_type']}")
+            if details.get("brand"):
+                device_info.append(f"🏷️ Brand: {details['brand']}")
+            if details.get("model"):
+                device_info.append(f"📦 Model: {details['model']}")
+            if details.get("usage"):
+                device_info.append(f"🎯 Use: {details['usage']}")
+            if device_info:
+                details_summary = f"\n💻 **Device Details**:\n" + "\n".join([f"• {info}" for info in device_info])
+        elif goal_type == "house" and details:
+            house_info = []
+            if details.get("property_type"):
+                house_info.append(f"🏠 Type: {details['property_type']}")
+            if details.get("location"):
+                house_info.append(f"📍 Location: {details['location']}")
+            if house_info:
+                details_summary = f"\n🏡 **Property Details**:\n" + "\n".join([f"• {info}" for info in house_info])
+        elif goal_type == "wedding" and details:
+            wedding_info = []
+            if details.get("wedding_style"):
+                wedding_info.append(f"💒 Style: {details['wedding_style']}")
+            if details.get("guest_count"):
+                wedding_info.append(f"👥 Guests: {details['guest_count']}")
+            if wedding_info:
+                details_summary = f"\n💍 **Wedding Details**:\n" + "\n".join([f"• {info}" for info in wedding_info])
+        elif goal_type == "education" and details:
+            education_info = []
+            if details.get("education_type"):
+                education_info.append(f"🎓 Type: {details['education_type']}")
+            if details.get("field_of_study"):
+                education_info.append(f"📚 Field: {details['field_of_study']}")
+            if education_info:
+                details_summary = f"\n📖 **Education Details**:\n" + "\n".join([f"• {info}" for info in education_info])
+        
+        # Celebratory and informative response
+        celebration_messages = [
+            "🎉 **Boom! Goal Created with Details!**",
+            "✨ **Amazing! Your Detailed Goal is Live!**",
+            "🚀 **Fantastic! Detailed Goal Successfully Set Up!**",
+            "🏆 **Awesome! Your Specific Dream is Now a Plan!**"
+        ]
+        
+        tips = [
+            "💡 **Pro Tip**: Having specific details makes your goal more motivating!",
+            "💪 **Remember**: The clearer your vision, the stronger your motivation!",
+            "🌟 **You've got this!** Detailed goals are 10x more likely to be achieved!",
+            "📈 **Smart move!** Specific goals create specific action plans!"
+        ]
+        
+        celebration = random.choice(celebration_messages)
+        tip = random.choice(tips)
+        
+        return f"{celebration}\n\n**Your '{goal_name}' Goal is Ready!** 🎯{details_summary}\n\n📊 **Goal Summary:**\n• **Target**: RM{amount:.2f}\n• **Target Date**: {target_date.strftime('%B %d, %Y')}\n• **Time Left**: {days_until} days ({months_until:.1f} months)\n\n💰 **Saving Suggestions:**\n• **Monthly**: RM{monthly_suggestion:.2f}\n• **Weekly**: RM{weekly_suggestion:.2f}\n\n{tip}\n\nReady to make your first contribution or create another goal? I'm here to help! 😊"
+    else:
+        return "Oops! I had a small hiccup creating your goal. 😅 Don't worry - let's try again! Just say **'set a goal'** and we'll get it sorted! 💪"
 
 def process_user_input(input_text, user_email):
     """
@@ -1237,6 +1910,169 @@ def process_user_input(input_text, user_email):
                 else:
                     st.session_state.debug_info = "\n".join(debug_info)
                     return "I want to make sure I understand you perfectly! 😊\n\n**Could you say:**\n• **'Yes'** to activate this budget\n• **'No'** if you'd like to make changes\n\nI'm here to get this exactly right for you! 🎯"
+
+    # ENHANCED Goal Conversation Handling - COMPLETELY FIXED
+    if "goal_conversation" in st.session_state:
+        stage = st.session_state.goal_conversation.get("stage", "ask_goal_name")
+        input_lower = input_text.lower()
+        
+        # Enhanced cancel detection
+        cancel_words = ["cancel", "stop", "nevermind", "never mind", "forget it", "change mind", "quit", "exit", "abort"]
+        if any(word in input_lower for word in cancel_words):
+            del st.session_state.goal_conversation
+            return "No worries at all! 😊 Setting goals should be exciting, not stressful!\n\nWhenever you're ready to turn a dream into a plan, just say **'set a goal'** and I'll be here to help make it happen! Take your time! 💭"
+        
+        if stage == "ask_goal_name":
+            # Store goal name and ask for amount with encouragement
+            goal_name = input_text.strip()
+            st.session_state.goal_conversation["goal_name"] = goal_name
+            st.session_state.goal_conversation["stage"] = "ask_amount"
+            
+            # Encouraging responses based on goal type
+            encouragement_map = {
+                "emergency": "Smart choice! Emergency funds are like financial superheroes - they're there when you need them most! 🦸‍♀️",
+                "vacation": "How exciting! Vacations create memories that last a lifetime! 🏖️✈️",
+                "car": "Great thinking! Reliable transportation opens up so many opportunities! 🚗",
+                "house": "Amazing! Homeownership is such a rewarding milestone! 🏠",
+                "wedding": "How wonderful! Your special day deserves to be everything you dreamed of! 💍",
+                "education": "Fantastic! Investing in yourself is the best investment you can make! 🎓",
+                "laptop": "Perfect! Good tech can really boost your productivity and creativity! 💻",
+                "phone": "Nice! Staying connected with great tech is so important these days! 📱"
+            }
+            
+            encouragement = "Perfect choice! I love helping people save for their dreams! 🌟"
+            for keyword, message in encouragement_map.items():
+                if keyword in goal_name.lower():
+                    encouragement = message
+                    break
+            
+            return f"**{goal_name}** - {encouragement}\n\nNow, how much do you want to save for this goal? Just tell me the target amount - for example:\n• **'5000'** for RM5,000\n• **'1200'** for RM1,200\n\nWhat's your target amount? 💰"
+        
+        elif stage == "ask_amount":
+            # Extract amount and ask for date with helpful suggestions
+            amount_match = re.search(r"(\d+\.?\d*)", input_text)
+            if amount_match:
+                try:
+                    amount = float(amount_match.group(1))
+                    st.session_state.goal_conversation["amount"] = amount
+                    st.session_state.goal_conversation["stage"] = "ask_date"
+                    
+                    # Encouraging response based on amount
+                    if amount >= 10000:
+                        amount_encouragement = "Wow! That's a significant goal! I love your ambition! 🚀"
+                    elif amount >= 5000:
+                        amount_encouragement = "That's a solid target! You're thinking big! 💪"
+                    elif amount >= 1000:
+                        amount_encouragement = "Great target amount! Very achievable with the right plan! 📈"
+                    else:
+                        amount_encouragement = "Perfect! Starting with achievable goals is super smart! 🎯"
+                    
+                    return f"Excellent! RM{amount:.2f} for {st.session_state.goal_conversation['goal_name']}! {amount_encouragement}\n\nWhen would you like to achieve this goal? You can tell me:\n\n⏰ **Timeframe Examples:**\n• 'In 6 months'\n• 'By next December'\n• 'In 1 year'\n• 'By summer 2025'\n• Or any specific date!\n\nWhen do you want to reach this goal? 📅"
+                except ValueError:
+                    return "Hmm, I'm having trouble reading that number! 😅 Could you help me out by just typing the amount?\n\n**For example:**\n• Type **'3000'** for RM3,000\n• Type **'599.99'** for RM599.99\n\nWhat's your target amount? 💰"
+            else:
+                return "I'm looking for your target amount! 🔍 How much do you want to save for this goal?\n\nJust tell me the number - like **'2500'** for RM2,500. What's your target? 💡"
+        
+        elif stage == "ask_date":
+            # Process date with friendly parsing and create goal
+            try:
+                input_lower = input_text.lower()
+                today = datetime.now()
+                
+                # Enhanced date parsing
+                if "month" in input_lower:
+                    months_match = re.search(r"(\d+)", input_lower)
+                    if months_match:
+                        months_num = int(months_match.group(1))
+                        target_date = today + timedelta(days=months_num * 30)
+                    else:
+                        target_date = today + timedelta(days=180)  # Default 6 months
+                elif "year" in input_lower:
+                    if "next year" in input_lower:
+                        target_date = today.replace(year=today.year + 1, month=12, day=31)
+                    else:
+                        years_match = re.search(r"(\d+)", input_lower)
+                        if years_match:
+                            years_num = int(years_match.group(1))
+                            target_date = today + timedelta(days=years_num * 365)
+                        else:
+                            target_date = today + timedelta(days=365)
+                elif "december" in input_lower or "dec" in input_lower:
+                    year = today.year if today.month <= 12 else today.year + 1
+                    target_date = datetime(year, 12, 31)
+                elif "summer" in input_lower:
+                    year = today.year + 1 if "2025" in input_lower else today.year
+                    target_date = datetime(year, 6, 21)  # Summer solstice
+                elif "january" in input_lower or "jan" in input_lower:
+                    year = today.year + 1
+                    target_date = datetime(year, 1, 31)
+                else:
+                    # Default to 1 year from now
+                    target_date = today + timedelta(days=365)
+                
+                # Create the goal
+                goal_name = st.session_state.goal_conversation["goal_name"]
+                amount = st.session_state.goal_conversation["amount"]
+                
+                # Determine goal type based on name
+                goal_type = "savings"  # default
+                goal_name_lower = goal_name.lower()
+                if any(word in goal_name_lower for word in ["emergency", "fund"]):
+                    goal_type = "emergency_fund"
+                elif any(word in goal_name_lower for word in ["vacation", "trip", "travel", "holiday"]):
+                    goal_type = "vacation"
+                elif any(word in goal_name_lower for word in ["car", "vehicle"]):
+                    goal_type = "car"
+                elif any(word in goal_name_lower for word in ["house", "home", "property"]):
+                    goal_type = "house"
+                elif any(word in goal_name_lower for word in ["laptop", "computer", "phone", "gadget", "tech"]):
+                    goal_type = "electronics"
+                elif any(word in goal_name_lower for word in ["education", "course", "school", "study"]):
+                    goal_type = "education"
+                elif any(word in goal_name_lower for word in ["wedding", "marriage"]):
+                    goal_type = "wedding"
+                elif any(word in goal_name_lower for word in ["debt", "loan", "payoff"]):
+                    goal_type = "debt_payoff"
+                
+                target_date_str = target_date.strftime("%Y-%m-%d")
+                
+                success, goal_id = add_goal(user_email, goal_name, goal_type, amount, target_date_str, 0)
+                
+                # Clear conversation state
+                del st.session_state.goal_conversation
+                
+                if success:
+                    # Calculate helpful information
+                    days_until = (target_date - today).days
+                    months_until = max(1, days_until / 30.44)
+                    monthly_suggestion = amount / months_until
+                    weekly_suggestion = amount / (days_until / 7) if days_until > 0 else amount
+                    
+                    # Celebratory and informative response
+                    celebration_messages = [
+                        "🎉 **Boom! Goal Created!**",
+                        "✨ **Amazing! Your Goal is Live!**",
+                        "🚀 **Fantastic! Goal Successfully Set Up!**",
+                        "🏆 **Awesome! Your Dream is Now a Plan!**"
+                    ]
+                    
+                    tips = [
+                        "💡 **Pro Tip**: Set up automatic transfers to make saving effortless!",
+                        "💪 **Remember**: Small, consistent contributions add up to big results!",
+                        "🌟 **You've got this!** Every RM you save brings you closer to your goal!",
+                        "📈 **Smart move!** People with written goals are 42% more likely to achieve them!"
+                    ]
+                    
+                    celebration = random.choice(celebration_messages)
+                    tip = random.choice(tips)
+                    
+                    return f"{celebration}\n\n**Your '{goal_name}' Goal is Ready!** 🎯\n\n📊 **Goal Details:**\n• **Target**: RM{amount:.2f}\n• **Target Date**: {target_date.strftime('%B %d, %Y')}\n• **Time Left**: {days_until} days ({months_until:.1f} months)\n\n💰 **Saving Suggestions:**\n• **Monthly**: RM{monthly_suggestion:.2f}\n• **Weekly**: RM{weekly_suggestion:.2f}\n\n{tip}\n\nReady to make your first contribution or create another goal? I'm here to help! 😊"
+                else:
+                    return "Oops! I had a small hiccup creating your goal. 😅 Don't worry - let's try again! Just say **'set a goal'** and we'll get it sorted! 💪"
+                    
+            except Exception as e:
+                del st.session_state.goal_conversation
+                return "I had a little trouble understanding that date, but no worries! 😊 Let's try again - just say **'set a goal'** and I'll help you through it step by step! 🎯"
     
     # PRIORITY 2: Handle expense confirmation flow
     assistant_messages = [msg for msg in st.session_state.messages if msg["role"] == "assistant"]
@@ -1656,6 +2492,109 @@ def process_user_input(input_text, user_email):
         
         return budget_text
     
+        # Handle goal_query intent - ENHANCED VERSION
+    elif intent_tag == "goal_query":
+        goals_summary = get_goals_summary(user_email)
+        return goals_summary
+    
+    # Handle goal_set intent - ENHANCED VERSION
+    elif intent_tag == "goal_set":
+        # Check if they mentioned a specific goal type in their message
+        input_lower = input_text.lower()
+        goal_suggestions = {
+            "emergency": "emergency fund",
+            "vacation": "vacation fund", 
+            "car": "new car",
+            "house": "house down payment",
+            "laptop": "new laptop",
+            "phone": "new phone",
+            "wedding": "wedding fund",
+            "education": "education fund"
+        }
+        
+        suggested_goal = None
+        for keyword, suggestion in goal_suggestions.items():
+            if keyword in input_lower:
+                suggested_goal = suggestion
+                break
+        
+        if suggested_goal:
+            # Start with the detected goal
+            st.session_state.goal_conversation = {
+                "stage": "ask_amount",
+                "goal_name": suggested_goal
+            }
+            
+            encouragement_map = {
+                "emergency fund": "Brilliant! Emergency funds are like financial peace of mind in the bank! 🛡️",
+                "vacation fund": "How exciting! Life is meant to be explored and enjoyed! 🏖️",
+                "new car": "Smart thinking! Reliable transportation opens up so many opportunities! 🚗",
+                "house down payment": "Incredible! Homeownership is such an amazing milestone! 🏠",
+                "new laptop": "Great choice! Investing in good tech can really boost your possibilities! 💻",
+                "new phone": "Nice! Staying connected with great technology is so important! 📱",
+                "wedding fund": "How wonderful! Your special day deserves to be magical! 💍",
+                "education fund": "Fantastic! The best investment is always in yourself! 🎓"
+            }
+            
+            encouragement = encouragement_map.get(suggested_goal, "Perfect choice! I love helping people achieve their dreams! 🌟")
+            
+            return f"**{suggested_goal.title()}** - {encouragement}\n\nHow much do you want to save for this goal? Just tell me the target amount - for example:\n• **'5000'** for RM5,000\n• **'1500'** for RM1,500\n\nWhat's your target amount? 💰"
+        else:
+            # Start goal creation conversation
+            st.session_state.goal_conversation = {"stage": "ask_goal_name"}
+            return "I absolutely love helping people turn dreams into achievable plans! 🎯✨\n\n**What would you like to save for?** Here are some popular goals I help people with:\n\n💰 **Emergency Fund** - peace of mind money\n🏖️ **Vacation** - create amazing memories\n🚗 **New Car** - reliable transportation\n🏠 **House Down Payment** - your future home\n💻 **Electronics** - that tech you've been wanting\n🎓 **Education** - invest in yourself\n💍 **Wedding** - your special day\n💳 **Debt Payoff** - financial freedom\n\nJust tell me what you're dreaming of! What goal speaks to your heart? 😊"
+    
+    # Handle goal_contribution intent - ENHANCED VERSION  
+    elif intent_tag == "goal_contribution":
+        goals = get_user_goals(user_email)
+        if not goals:
+            return "Hey there! 😊 I don't see any goals set up yet, but that's totally fine!\n\n🎯 **Ready to create your first goal?** It's one of the most powerful ways to turn dreams into reality!\n\nJust say **'set a goal'** and I'll help you set up something amazing! What do you say? ✨"
+        
+        # Check if they mentioned a specific amount and goal in their message
+        input_lower = input_text.lower()
+        amount_match = re.search(r"(\d+\.?\d*)", input_text)
+        
+        if amount_match:
+            amount = float(amount_match.group(1))
+            
+            # Try to find which goal they're referring to
+            found_goal = None
+            for goal in goals:
+                goal_name_words = goal["goal_name"].lower().split()
+                if any(word in input_lower for word in goal_name_words):
+                    found_goal = goal
+                    break
+            
+            if found_goal:
+                # Add the contribution
+                success = add_goal_contribution(found_goal["id"], user_email, amount, f"Added via chat on {datetime.now().strftime('%Y-%m-%d')}")
+                
+                if success:
+                    # Get updated progress
+                    found_goal["current_amount"] += amount  # Update for immediate feedback
+                    progress = get_goal_progress(found_goal)
+                    
+                    celebration_messages = [
+                        "🎉 **Awesome!** You just made progress!",
+                        "💪 **Yes!** Another step closer to your goal!",
+                        "🌟 **Amazing!** You're building momentum!",
+                        "🚀 **Fantastic!** Your future self will thank you!"
+                    ]
+                    
+                    celebration = random.choice(celebration_messages)
+                    
+                    return f"{celebration}\n\n**RM{amount:.2f} added to '{found_goal['goal_name']}'!**\n\n📈 **Updated Progress:**\n• **Current**: RM{found_goal['current_amount']:.2f} of RM{found_goal['target_amount']:.2f}\n• **Progress**: {progress['progress_percent']:.1f}% complete\n• **Remaining**: RM{progress['remaining_amount']:.2f}\n• **Status**: {progress['status']}\n\n{progress['status_msg']} Keep up the great work! 💫"
+                else:
+                    return "Oops! I had a small issue adding that contribution. 😅 Could you try again? I want to make sure your progress gets recorded! 💪"
+            else:
+                # Show available goals for contribution
+                goal_list = "\n".join([f"• **{goal['goal_name']}** (RM{goal['current_amount']:.2f} of RM{goal['target_amount']:.2f})" for goal in goals])
+                return f"Great! I see you want to add RM{amount:.2f} to a goal! 💰\n\n**Which goal should I add it to?**\n\n{goal_list}\n\nJust tell me which one - for example: 'Add it to my vacation fund' 🎯"
+        else:
+            # Show available goals
+            goal_list = "\n".join([f"• **{goal['goal_name']}** (RM{goal['current_amount']:.2f} of RM{goal['target_amount']:.2f})" for goal in goals])
+            return f"I love seeing people make progress on their goals! 💪 This is how dreams become reality!\n\n**Your Current Goals:**\n\n{goal_list}\n\nWhich goal would you like to add money to, and how much? For example:\n• 'Add RM200 to my vacation fund'\n• 'Put RM100 towards emergency fund'\n\nWhat would you like to do? 🎯"
+    
     # Get response based on intent for all other intents
     try:
         return get_response(intent_tag, input_text, user_email)
@@ -1720,7 +2659,7 @@ def create_annotated_chart(spending_data, title="Spending by Category"):
 
 # Only show page selection if authenticated
 if st.session_state.authenticated:
-    page = st.sidebar.selectbox("Choose a page", ["Home", "Spending Analysis", "Budget Tracking", "About"])
+    page = st.sidebar.selectbox("Choose a page", ["Home", "Spending Analysis", "Budget Tracking", "Goals", "About"])
     
     # Add debug panel
     if st.sidebar.checkbox("Show Debug Info"):
@@ -2291,6 +3230,245 @@ elif page == "Budget Tracking":
             if success:
                 st.success(f"Budget of RM{budget_amount:.2f} set for {selected_category} in {selected_month} {selected_year}.")
                 st.rerun()  # Refresh to show the new budget
+
+elif page == "Goals":
+    st.markdown("# Financial Goals 🎯")
+    st.sidebar.markdown("# Financial Goals 🎯")
+    
+    # Get the current user's email
+    user_email = st.session_state.current_user
+    
+    # Get user's goals
+    goals = get_user_goals(user_email)
+    
+    # Enhanced Goals overview with personality
+    if goals:
+        st.subheader("Your Goals Journey! 🌟")
+        
+        # Calculate overall stats
+        total_target = sum(goal["target_amount"] for goal in goals)
+        total_saved = sum(goal["current_amount"] for goal in goals)
+        overall_progress = (total_saved / total_target) * 100 if total_target > 0 else 0
+        completed_goals = sum(1 for goal in goals if get_goal_progress(goal)["progress_percent"] >= 100)
+        
+        # Encouraging messages based on progress
+        if completed_goals > 0:
+            progress_message = f"🏆 **Incredible!** You've completed {completed_goals} goal{'s' if completed_goals > 1 else ''}! You're a goal-achieving superstar!"
+        elif overall_progress >= 75:
+            progress_message = "🔥 **Outstanding!** You're making amazing progress across all your goals!"
+        elif overall_progress >= 50:
+            progress_message = "📈 **Excellent work!** You're building great momentum with your savings!"
+        elif overall_progress >= 25:
+            progress_message = "🚀 **Good start!** Every step forward is bringing you closer to your dreams!"
+        else:
+            progress_message = "✨ **You've got this!** Every great journey starts with a single step!"
+        
+        st.info(progress_message)
+        
+        # Display overall metrics with friendly labels
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("🎯 Total Dream Amount", f"RM{total_target:.2f}")
+        
+        with col2:
+            st.metric("💰 Total Saved", f"RM{total_saved:.2f}")
+        
+        with col3:
+            st.metric("📊 Overall Progress", f"{overall_progress:.1f}%")
+        
+        st.markdown("---")
+        
+        # Display individual goals with enhanced personality and details
+        for goal in goals:
+            progress = get_goal_progress(goal)
+            
+            # Friendly status icons for expandable headers
+            status_icon = "🎉" if progress["progress_percent"] >= 100 else "🔥" if progress["progress_percent"] >= 90 else "💪"
+            
+            with st.expander(f"{status_icon} {goal['goal_name']} - {progress['status']}", expanded=True):
+                # Goal details with encouraging language
+                col1, col2 = st.columns([2, 1])
+                
+                with col1:
+                    st.write(f"**🎯 Goal Type:** {goal['goal_type'].replace('_', ' ').title()}")
+                    st.write(f"**💰 Target Amount:** RM{goal['target_amount']:.2f}")
+                    st.write(f"**💵 Current Savings:** RM{goal['current_amount']:.2f}")
+                    st.write(f"**📅 Target Date:** {goal['target_date']}")
+                    
+                    # Display detailed goal information
+                    details_display = format_goal_details_display(goal)
+                    if details_display:
+                        st.markdown("---")
+                        st.markdown(details_display)
+                
+                with col2:
+                    st.write(f"**🎁 Remaining:** RM{progress['remaining_amount']:.2f}")
+                    st.write(f"**⏰ Days Left:** {progress['days_remaining']} days")
+                    if progress['days_remaining'] > 0:
+                        st.write(f"**💡 Suggested Monthly:** RM{progress['required_monthly']:.2f}")
+                    st.write(f"**📈 Progress:** {progress['progress_percent']:.1f}%")
+                
+                # Progress bar with encouraging message
+                st.progress(progress['progress_percent'] / 100)
+                st.write(f"💭 **{progress['status_msg']}**")
+                
+                # Enhanced contribution form
+                with st.form(f"contribution_form_{goal['id']}"):
+                    st.write("**🚀 Boost Your Progress**")
+                    
+                    col1, col2 = st.columns([2, 1])
+                    with col1:
+                        contribution_amount = st.number_input(
+                            "Add to your savings (RM)", 
+                            min_value=0.0, 
+                            format="%.2f", 
+                            key=f"contrib_{goal['id']}",
+                            help="Every contribution brings you closer to your goal! 💪"
+                        )
+                    
+                    with col2:
+                        # Quick amount buttons
+                        st.write("**Quick Add:**")
+                        if st.form_submit_button("RM50", key=f"quick50_{goal['id']}"):
+                            contribution_amount = 50.0
+                        if st.form_submit_button("RM100", key=f"quick100_{goal['id']}"):
+                            contribution_amount = 100.0
+                    
+                    contribution_note = st.text_input(
+                        "Optional note", 
+                        key=f"note_{goal['id']}",
+                        placeholder="e.g., 'Bonus money', 'Savings from lunch'"
+                    )
+                    
+                    if st.form_submit_button("💰 Add Contribution", type="primary"):
+                        if contribution_amount > 0:
+                            success = add_goal_contribution(
+                                goal['id'], 
+                                user_email, 
+                                contribution_amount, 
+                                contribution_note or f"Added via Goals page on {datetime.now().strftime('%Y-%m-%d')}"
+                            )
+                            if success:
+                                st.success(f"🎉 Amazing! Added RM{contribution_amount:.2f} to {goal['goal_name']}! You're making your dreams happen!")
+                                st.rerun()
+                            else:
+                                st.error("Oops! Something went wrong. Please try again! 😅")
+                        else:
+                            st.error("Please enter an amount to contribute! Every ringgit counts! 💫")
+    
+    else:
+        # Enhanced empty state with encouragement
+        st.markdown("""
+        ### Welcome to Your Goals Journey! 🎯✨
+        
+        **You haven't set any financial goals yet, but that's totally fine!** Everyone starts somewhere, and you're already in the right place! 
+        
+        🌟 **Why set financial goals?**
+        - Turn your dreams into actionable plans
+        - Stay motivated with clear targets  
+        - Track your progress and celebrate wins
+        - Build better saving habits
+        
+        🚀 **Ready to get started?** Let's create your first goal below!
+        """)
+    
+    # Enhanced goal creation form with detailed specifications
+    st.markdown("---")
+    st.subheader("✨ Create Your Next Goal")
+    
+    with st.form("new_goal_form"):
+        st.write("**Turn your dreams into achievable plans! 🎯**")
+        
+        # Basic goal information
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            goal_name = st.text_input(
+                "🎯 What's your goal?", 
+                placeholder="e.g., Emergency Fund, Dream Vacation, New Car",
+                help="Give your goal a name that excites you!"
+            )
+            
+            goal_type = st.selectbox("📂 Goal Category", [
+                "emergency_fund", "vacation", "car", "house", "electronics", 
+                "education", "debt_payoff", "investment", "wedding", "other"
+            ], format_func=lambda x: {
+                "emergency_fund": "💰 Emergency Fund",
+                "vacation": "🏖️ Vacation", 
+                "car": "🚗 Car",
+                "house": "🏠 House/Property",
+                "electronics": "💻 Electronics/Tech",
+                "education": "🎓 Education",
+                "debt_payoff": "💳 Debt Payoff",
+                "investment": "📈 Investment",
+                "wedding": "💍 Wedding",
+                "other": "📦 Other"
+            }[x])
+            
+            target_amount = st.number_input(
+                "💰 How much do you need?", 
+                min_value=0.0, 
+                format="%.2f",
+                help="Your target amount - dream big!"
+            )
+        
+        with col2:
+            target_date = st.date_input(
+                "📅 When do you want to achieve this?", 
+                min_value=datetime.now().date(),
+                help="Having a deadline keeps you motivated!"
+            )
+            
+            monthly_contribution = st.number_input(
+                "📈 Monthly contribution (optional)", 
+                min_value=0.0, 
+                format="%.2f",
+                help="How much can you save each month?"
+            )
+            
+            # Smart calculation display
+            if target_amount > 0 and monthly_contribution > 0:
+                months_needed = target_amount / monthly_contribution
+                
+                if months_needed <= 12:
+                    st.success(f"🎯 **Great plan!** At RM{monthly_contribution:.2f}/month, you'll reach your goal in {months_needed:.1f} months!")
+                else:
+                    st.info(f"📊 At RM{monthly_contribution:.2f}/month, you'll need {months_needed:.1f} months. Consider increasing monthly savings for faster results!")
+            
+            elif target_amount > 0:
+                # Calculate suggested monthly amount based on target date
+                days_until = (target_date - datetime.now().date()).days
+                if days_until > 0:
+                    months_until = days_until / 30.44
+                    suggested_monthly = target_amount / months_until
+                    st.info(f"💡 **Suggestion:** Save RM{suggested_monthly:.2f}/month to reach your goal by {target_date.strftime('%B %Y')}!")
+        
+        # Enhanced goal details section
+        st.markdown("---")
+        st.markdown("### 📋 Goal Details (Optional but Recommended)")
+        st.markdown("*Adding details helps you stay motivated and focused on your specific goal!*")
+        
+        # Get detailed form fields based on goal type
+        goal_details = get_goal_details_form(goal_type)
+        
+        # Enhanced submit button
+        if st.form_submit_button("🚀 Create My Detailed Goal!", type="primary"):
+            if goal_name and target_amount > 0:
+                target_date_str = target_date.strftime("%Y-%m-%d")
+                success, goal_id = add_goal(
+                    user_email, goal_name, goal_type, target_amount, 
+                    target_date_str, monthly_contribution, goal_details
+                )
+                
+                if success:
+                    st.balloons()  # Celebration animation!
+                    st.success(f"🎉 **Congratulations!** Your detailed '{goal_name}' goal is now live! You're officially on the path to making your dreams come true! 🌟")
+                    st.rerun()
+                else:
+                    st.error("Oops! Something went wrong creating your goal. Please try again! 😅")
+            else:
+                st.error("Please fill in your goal name and target amount to get started! 💪")
 
 elif page == "About":
     st.header("About Personal Finance Chatbot")

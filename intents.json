@@ -165,6 +165,80 @@
             ]
         },
         {
+            "tag": "goal_query",
+            "patterns": [
+                "show my goals",
+                "view my goals", 
+                "check my goals",
+                "goal progress",
+                "how are my goals",
+                "goals status",
+                "my savings goals",
+                "goal summary",
+                "see goals",
+                "what are my goals",
+                "goal overview",
+                "show goals",
+                "my goal",
+                "all goals",
+                "check goal progress",
+                "how's my saving",
+                "savings progress"
+            ],
+            "responses": [
+                "Here's how you're doing with your financial goals! 🎯\n\n{goals_summary}\n\nKeep up the great work! Want to add money to any goal or create a new one?"
+            ]
+        },
+        {
+            "tag": "goal_set", 
+            "patterns": [
+                "set a goal",
+                "create goal",
+                "new goal", 
+                "add goal",
+                "save for",
+                "saving goal",
+                "want to save",
+                "financial goal",
+                "savings target",
+                "set savings goal",
+                "i want to save for",
+                "help me save",
+                "saving plan",
+                "set target",
+                "create savings goal",
+                "make a goal",
+                "i want to set goal",
+                "want to set goal",
+                "set goal"
+            ],
+            "responses": [
+                "I absolutely love helping people set financial goals! 🎯 It's one of the most powerful ways to turn your dreams into reality!\n\nWhat would you like to save for? Here are some popular goals I help people with:\n\n💰 **Emergency Fund** - for peace of mind\n🏖️ **Vacation** - time to relax and explore\n🚗 **New Car** - reliable transportation  \n🏠 **House Down Payment** - your future home\n💻 **Electronics/Gadgets** - that tech you've been wanting\n🎓 **Education** - investing in yourself\n💳 **Debt Payoff** - financial freedom\n💍 **Wedding** - your special day\n\nJust tell me what you're dreaming of saving for! 😊"
+            ]
+        },
+        {
+            "tag": "goal_contribution",
+            "patterns": [
+                "add to goal",
+                "contribute to goal", 
+                "save money for",
+                "put money towards",
+                "add money to",
+                "goal contribution",
+                "save for my goal",
+                "progress on goal",
+                "add to my savings",
+                "deposit to goal",
+                "contribute to",
+                "save towards",
+                "add funds to",
+                "make progress on"
+            ],
+            "responses": [
+                "Awesome! I love seeing people make progress on their goals! 💪 This is how dreams become reality - one contribution at a time!\n\nWhich goal would you like to add money to, and how much? Just tell me something like 'Add RM200 to my vacation fund' and I'll take care of it! 🎯"
+            ]
+        },
+        {
             "tag": "spending_summary",
             "patterns": [
                 "spending summary",
@@ -229,7 +303,7 @@
                 "how does this work"
             ],
             "responses": [
-              "# 💰 Finance Assistant Help Guide\n\nI'm your personal finance chatbot, here to help you manage your money effectively!\n\n## 📝 Core Features\n\n### 🧾 Track Expenses\n* Record daily spending: \"I spent RM25 on lunch\"\n* Add details: \"Paid RM80 for dinner with friends\"\n* Quick logging: \"RM15 coffee\"\n\n### 📊 View Your Spending\n* Recent history: \"Show my recent expenses\"\n* Category breakdown: \"What did I spend on food?\"\n* Time periods: \"Show my spending for July\"\n* Summary: \"Give me a spending summary\"\n\n### 💼 Budget Management\n* Set budgets: \"Set a RM500 budget for food\"\n* Check status: \"How am I doing on my budget?\"\n* Budget advice: \"Am I overspending?\"\n\n### 💡 Financial Insights\n* Savings tips: \"How can I save money?\"\n* Category advice: \"Help me reduce food expenses\"\n* Spending patterns: \"Where am I spending the most?\"\n\n## 🚀 Quick Examples\n1. \"I spent RM45 on groceries yesterday\"\n2. \"Show my expenses for this month\"\n3. \"Set a monthly budget of RM200 for entertainment\"\n4. \"How much have I spent on shopping?\"\n5. \"Give me tips to save on transportation\"\n\n---\n\nType any of these commands to get started, or ask me questions about your finances in natural language! 🌟"
+              "# 💰 Finance Assistant Help Guide\n\nI'm your personal finance chatbot, here to help you manage your money effectively!\n\n## 📝 Core Features\n\n### 🧾 Track Expenses\n* Record daily spending: \"I spent RM25 on lunch\"\n* Add details: \"Paid RM80 for dinner with friends\"\n* Quick logging: \"RM15 coffee\"\n\n### 📊 View Your Spending\n* Recent history: \"Show my recent expenses\"\n* Category breakdown: \"What did I spend on food?\"\n* Time periods: \"Show my spending for July\"\n* Summary: \"Give me a spending summary\"\n\n### 💼 Budget Management\n* Set budgets: \"Set a RM500 budget for food\"\n* Check status: \"How am I doing on my budget?\"\n* Budget advice: \"Am I overspending?\"\n\n### 🎯 Goals Management\n* Set goals: \"Set a goal for a new car\"\n* Check progress: \"Show my goals\"\n* Add contributions: \"Add RM200 to my vacation fund\"\n\n### 💡 Financial Insights\n* Savings tips: \"How can I save money?\"\n* Category advice: \"Help me reduce food expenses\"\n* Spending patterns: \"Where am I spending the most?\"\n\n## 🚀 Quick Examples\n1. \"I spent RM45 on groceries yesterday\"\n2. \"Show my expenses for this month\"\n3. \"Set a monthly budget of RM200 for entertainment\"\n4. \"Set a goal to save RM10000 for a new car\"\n5. \"Give me tips to save on transportation\"\n\n---\n\nType any of these commands to get started, or ask me questions about your finances in natural language! 🌟"
             ] 
         },
         {
@@ -268,9 +342,9 @@
             "tag": "fallback",
             "patterns": [],
             "responses": [
-                "I'm your personal finance assistant. You can ask me to record expenses, check your budget, provide spending summaries, or offer savings advice. Type 'help' to see all the things I can do!",
-                "I didn't quite catch that. I can help you track expenses, set budgets, and provide financial insights. Try 'help' to see what I can do.",
-                "Sorry, I'm not sure what you're asking. I'm designed to help with personal finance tasks like expense tracking and budgeting. Type 'help' for more information."
+                "I'm your personal finance assistant. You can ask me to record expenses, check your budget, provide spending summaries, set financial goals, or offer savings advice. Type 'help' to see all the things I can do!",
+                "I didn't quite catch that. I can help you track expenses, set budgets, create goals, and provide financial insights. Try 'help' to see what I can do.",
+                "Sorry, I'm not sure what you're asking. I'm designed to help with personal finance tasks like expense tracking, budgeting, and goal setting. Type 'help' for more information."
             ]
         }
     ]
