@@ -238,6 +238,54 @@
                 "Awesome! I love seeing people make progress on their goals! 💪 This is how dreams become reality - one contribution at a time!\n\nWhich goal would you like to add money to, and how much? Just tell me something like 'Add RM200 to my vacation fund' and I'll take care of it! 🎯"
             ]
         },
+                {
+            "tag": "goal_templates",
+            "patterns": [
+                "goal templates",
+                "goal ideas",
+                "what goals can i set",
+                "goal suggestions",
+                "popular goals",
+                "common goals",
+                "goal examples",
+                "what should i save for",
+                "savings ideas",
+                "financial goal ideas",
+                "goal inspiration",
+                "savings suggestions",
+                "smart goals",
+                "realistic goals",
+                "achievable goals",
+                "goal options"
+            ],
+            "responses": [
+                "Great question! Here are some popular financial goals that many people work towards:\n\n💰 **Emergency Fund** - 3-6 months of expenses (RM3,000-15,000)\n🏖️ **Vacation** - Dream trips and getaways (RM2,000-15,000)\n🚗 **New Car** - Down payment or full purchase (RM20,000-120,000)\n🏠 **House Down Payment** - Your future home (RM50,000-300,000)\n💻 **Electronics** - Gadgets and tech upgrades (RM1,000-10,000)\n🎓 **Education** - Courses and skill development (RM5,000-50,000)\n💍 **Wedding** - Your special day (RM15,000-80,000)\n💳 **Debt Payoff** - Financial freedom\n\nWhich one speaks to you? Say 'set a goal' to get started! 🎯"
+            ]
+        },
+        
+        {
+            "tag": "goal_motivation",
+            "patterns": [
+                "why set goals",
+                "goal benefits",
+                "importance of goals",
+                "goal motivation",
+                "why save money",
+                "benefits of saving",
+                "financial planning",
+                "goal importance",
+                "why financial goals",
+                "goal psychology",
+                "savings motivation",
+                "goal success",
+                "achieving goals",
+                "goal tips",
+                "savings tips"
+            ],
+            "responses": [
+                "Excellent question! Setting financial goals is one of the smartest things you can do! 🌟\n\n**Here's why goals are game-changers:**\n\n🎯 **Clear Direction** - Know exactly what you're working towards\n💪 **Stay Motivated** - See progress and celebrate milestones\n📈 **Build Discipline** - Develop consistent saving habits\n🏆 **Achieve 42% More** - Studies show people with written goals achieve significantly more!\n💰 **Financial Security** - Build wealth systematically\n😌 **Reduce Stress** - Know you're prepared for the future\n🚀 **Turn Dreams into Plans** - Make the impossible possible!\n\nReady to set your first goal? Just say 'set a goal' and let's make magic happen! ✨"
+            ]
+        },
         {
             "tag": "spending_summary",
             "patterns": [

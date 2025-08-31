@@ -452,7 +452,261 @@ def get_budget_status(user_email, category=None, month=None, year=None):
     return budget_text
 
 # -------------------------------- Goals Functions -------------------------------
+def get_smart_goal_suggestions():
+    """Provide smart goal templates with realistic amounts for Malaysian context"""
+    templates = {
+        "emergency_fund": {
+            "name": "Emergency Fund",
+            "suggested_amounts": [3000, 5000, 10000, 15000],
+            "description": "3-6 months of expenses for peace of mind",
+            "timeline_months": [6, 12, 18, 24],
+            "priority": "high",
+            "tips": "Start with RM3,000 and build up gradually",
+            "icon": "💰"
+        },
+        "vacation": {
+            "name": "Dream Vacation",
+            "suggested_amounts": [2000, 5000, 8000, 15000],
+            "description": "Create unforgettable memories",
+            "timeline_months": [6, 12, 18, 24],
+            "priority": "medium",
+            "tips": "Budget based on destination and travel style",
+            "icon": "🏖️"
+        },
+        "car": {
+            "name": "New Car",
+            "suggested_amounts": [20000, 50000, 80000, 120000],
+            "description": "Reliable transportation for your future",
+            "timeline_months": [12, 24, 36, 48],
+            "priority": "medium",
+            "tips": "Consider down payment vs full purchase",
+            "icon": "🚗"
+        },
+        "house": {
+            "name": "Dream Home Down Payment",
+            "suggested_amounts": [50000, 100000, 200000, 300000],
+            "description": "Your key to homeownership",
+            "timeline_months": [24, 36, 48, 60],
+            "priority": "high",
+            "tips": "Aim for 10-20% of property value",
+            "icon": "🏠"
+        },
+        "wedding": {
+            "name": "Perfect Wedding",
+            "suggested_amounts": [15000, 30000, 50000, 80000],
+            "description": "Your special day deserves everything",
+            "timeline_months": [12, 18, 24, 36],
+            "priority": "high",
+            "tips": "Budget for all wedding expenses",
+            "icon": "💍"
+        },
+        "education": {
+            "name": "Education Investment",
+            "suggested_amounts": [5000, 15000, 30000, 50000],
+            "description": "Invest in your future success",
+            "timeline_months": [6, 12, 24, 36],
+            "priority": "high",
+            "tips": "Include tuition, books, and living expenses",
+            "icon": "🎓"
+        }
+    }
+    return templates
 
+def get_enhanced_goal_progress(goal):
+    """Enhanced progress calculation with motivational insights"""
+    target_amount = goal["target_amount"]
+    current_amount = goal["current_amount"]
+    target_date = datetime.strptime(goal["target_date"], "%Y-%m-%d")
+    today = datetime.now()
+    
+    # Basic calculations
+    progress_percent = min(100, (current_amount / target_amount) * 100 if target_amount > 0 else 0)
+    remaining_amount = max(0, target_amount - current_amount)
+    days_remaining = (target_date - today).days
+    months_remaining = max(0.1, days_remaining / 30.44)
+    
+    # Enhanced milestone tracking
+    milestones = {
+        25: {"icon": "🎯", "message": "Great start! You're building momentum!"},
+        50: {"icon": "🔥", "message": "Halfway there! You're doing amazing!"},
+        75: {"icon": "🚀", "message": "So close! The finish line is in sight!"},
+        90: {"icon": "💎", "message": "Almost there! You're absolutely crushing it!"},
+        100: {"icon": "🏆", "message": "GOAL ACHIEVED! You're a financial superstar!"}
+    }
+    
+    # Find current milestone
+    current_milestone = None
+    for milestone_percent in sorted(milestones.keys()):
+        if progress_percent >= milestone_percent:
+            current_milestone = milestones[milestone_percent]
+    
+    # Smart status determination
+    if progress_percent >= 100:
+        status = "🎉 ACHIEVED!"
+        status_msg = "Congratulations! You did it! Time to celebrate and set a new goal!"
+        status_color = "success"
+        next_action = "Consider setting a new goal or increasing this one!"
+    elif days_remaining < 0:
+        status = "⏰ Past Due"
+        status_msg = "Don't worry! You can still reach this goal. Want to adjust the date?"
+        status_color = "error"
+        next_action = "Consider extending the deadline or making a big contribution!"
+    elif progress_percent >= 90:
+        status = "🔥 SO CLOSE!"
+        status_msg = f"Just RM{remaining_amount:.2f} left! You're almost there!"
+        status_color = "success"
+        next_action = f"One more push of RM{remaining_amount:.2f} and you're done!"
+    elif progress_percent >= 75:
+        status = "🚀 EXCELLENT!"
+        status_msg = "You're in the final stretch! Keep up this amazing momentum!"
+        status_color = "success"
+        next_action = f"Save RM{remaining_amount/2:.2f} this month and next to finish strong!"
+    elif progress_percent >= 50:
+        status = "💪 STRONG PROGRESS"
+        status_msg = "You're over halfway! This is where champions are made!"
+        status_color = "warning"
+        next_action = f"Stay consistent with RM{remaining_amount/months_remaining:.2f}/month!"
+    elif progress_percent >= 25:
+        status = "🎯 BUILDING MOMENTUM"
+        status_msg = "Great foundation! Every contribution counts towards your dream!"
+        status_color = "warning"
+        next_action = f"Aim for RM{remaining_amount/months_remaining:.2f}/month to stay on track!"
+    else:
+        status = "🌟 GETTING STARTED"
+        status_msg = "Every great achievement starts with a first step! You've got this!"
+        status_color = "info"
+        next_action = f"Start with RM{remaining_amount/months_remaining:.2f}/month - totally doable!"
+    
+    # Calculate weekly and daily targets
+    weeks_remaining = max(1, days_remaining / 7)
+    weekly_target = remaining_amount / weeks_remaining if weeks_remaining > 0 else 0
+    daily_target = remaining_amount / days_remaining if days_remaining > 0 else 0
+    
+    # Progress velocity
+    created_date = datetime.strptime(goal.get("created_date", today.strftime("%Y-%m-%d")), "%Y-%m-%d")
+    days_since_creation = max(1, (today - created_date).days)
+    current_velocity = current_amount / days_since_creation if days_since_creation > 0 else 0
+    projected_completion = current_amount + (current_velocity * days_remaining) if current_velocity > 0 else current_amount
+    velocity_status = "ahead" if projected_completion >= target_amount else "behind"
+    
+    return {
+        "progress_percent": progress_percent,
+        "remaining_amount": remaining_amount,
+        "days_remaining": days_remaining,
+        "months_remaining": months_remaining,
+        "weeks_remaining": weeks_remaining,
+        "status": status,
+        "status_msg": status_msg,
+        "status_color": status_color,
+        "next_action": next_action,
+        "current_milestone": current_milestone,
+        "weekly_target": weekly_target,
+        "daily_target": daily_target,
+        "velocity_status": velocity_status,
+        "projected_completion": projected_completion,
+        "current_velocity": current_velocity,
+        "days_since_creation": days_since_creation
+    }
+
+def get_smart_contribution_suggestions(goal, user_email):
+    """Generate intelligent contribution suggestions"""
+    progress = get_enhanced_goal_progress(goal)
+    spending = get_spending_by_category(user_email)
+    monthly_spending = sum(spending.values()) if spending else 1000
+    
+    suggestions = []
+    
+    # Percentage-based suggestions
+    for percent in [5, 10, 15, 20]:
+        amount = (percent / 100) * monthly_spending
+        if amount >= 10:  # Only suggest if >= RM10
+            suggestions.append({
+                "type": "percentage",
+                "amount": amount,
+                "description": f"{percent}% of monthly spending",
+                "frequency": "monthly"
+            })
+    
+    # Round number suggestions
+    round_amounts = [50, 100, 200, 500, 1000]
+    for amount in round_amounts:
+        if amount <= monthly_spending * 0.3:  # Don't suggest more than 30% of spending
+            suggestions.append({
+                "type": "round",
+                "amount": amount,
+                "description": f"RM{amount} - nice round number!",
+                "frequency": "one-time"
+            })
+    
+    # Goal-specific suggestions
+    remaining = progress["remaining_amount"]
+    months_left = progress["months_remaining"]
+    
+    if months_left > 0 and remaining > 0:
+        monthly_needed = remaining / months_left
+        suggestions.append({
+            "type": "target",
+            "amount": monthly_needed,
+            "description": f"Monthly target to reach goal on time",
+            "frequency": "monthly"
+        })
+    
+    # Filter and sort by practicality
+    practical_suggestions = [s for s in suggestions if 10 <= s["amount"] <= monthly_spending * 0.5]
+    return sorted(practical_suggestions, key=lambda x: x["amount"])[:4]
+
+def calculate_goal_feasibility(target_amount, target_date, user_email):
+    """Calculate if goal is realistic based on user's spending patterns"""
+    spending = get_spending_by_category(user_email)
+    monthly_spending = sum(spending.values()) if spending else 1000
+    
+    days_until = (target_date - datetime.now().date()).days
+    months_until = max(1, days_until / 30.44)
+    required_monthly = target_amount / months_until
+    
+    # Calculate feasibility score
+    spending_ratio = required_monthly / monthly_spending if monthly_spending > 0 else 1
+    
+    if spending_ratio <= 0.1:
+        return {
+            "feasibility": "🟢 Very Achievable",
+            "message": "This goal is totally doable! You've got this!",
+            "difficulty": "easy"
+        }
+    elif spending_ratio <= 0.2:
+        return {
+            "feasibility": "🟡 Achievable with Focus",
+            "message": "This will require some discipline, but it's definitely achievable!",
+            "difficulty": "medium"
+        }
+    elif spending_ratio <= 0.3:
+        return {
+            "feasibility": "🟠 Challenging but Possible",
+            "message": "This is ambitious! Consider extending the timeline or reducing the amount.",
+            "difficulty": "hard"
+        }
+    else:
+        return {
+            "feasibility": "🔴 Very Challenging",
+            "message": "This might be too aggressive. Let's adjust the timeline or amount!",
+            "difficulty": "very_hard"
+        }
+
+def get_goal_priority_suggestion(user_email, goal_type):
+    """Suggest goal priority based on user's financial situation"""
+    goals = get_user_goals(user_email)
+    spending = get_spending_by_category(user_email)
+    
+    # Smart priority logic
+    if goal_type == "emergency_fund" and not any(g["goal_type"] == "emergency_fund" for g in goals):
+        return "🔥 HIGH PRIORITY - Everyone needs an emergency fund first!"
+    elif goal_type == "house" and sum(spending.values()) > 3000:
+        return "💡 SMART CHOICE - You have good income, perfect time for property!"
+    elif goal_type == "vacation" and len(goals) > 2:
+        return "🌟 REWARD YOURSELF - You're doing great with other goals!"
+    else:
+        return "👍 GREAT GOAL - This fits well with your financial journey!"
+    
 def add_goal(user_email, goal_name, goal_type, target_amount, target_date, monthly_contribution=0, goal_details=None):
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -3232,168 +3486,225 @@ elif page == "Budget Tracking":
                 st.rerun()  # Refresh to show the new budget
 
 elif page == "Goals":
-    st.markdown("# Financial Goals 🎯")
-    st.sidebar.markdown("# Financial Goals 🎯")
+    st.title("🎯 Your Financial Dreams & Goals")
+    st.sidebar.title("🎯 Financial Goals")
     
     # Get the current user's email
     user_email = st.session_state.current_user
     
-    # Get user's goals
+    # Get user's goals and templates
     goals = get_user_goals(user_email)
+    goal_templates = get_smart_goal_suggestions()
     
-    # Enhanced Goals overview with personality
+    # Enhanced header with personality
     if goals:
-        st.subheader("Your Goals Journey! 🌟")
+        # Create a nice header box
+        st.success("🌟 **Your Goals Dashboard** - Every goal you achieve brings you closer to financial freedom!")
         
-        # Calculate overall stats
+        # Overall progress metrics
         total_target = sum(goal["target_amount"] for goal in goals)
         total_saved = sum(goal["current_amount"] for goal in goals)
         overall_progress = (total_saved / total_target) * 100 if total_target > 0 else 0
-        completed_goals = sum(1 for goal in goals if get_goal_progress(goal)["progress_percent"] >= 100)
+        completed_goals = sum(1 for goal in goals if get_enhanced_goal_progress(goal)["progress_percent"] >= 100)
         
-        # Encouraging messages based on progress
-        if completed_goals > 0:
-            progress_message = f"🏆 **Incredible!** You've completed {completed_goals} goal{'s' if completed_goals > 1 else ''}! You're a goal-achieving superstar!"
-        elif overall_progress >= 75:
-            progress_message = "🔥 **Outstanding!** You're making amazing progress across all your goals!"
-        elif overall_progress >= 50:
-            progress_message = "📈 **Excellent work!** You're building great momentum with your savings!"
-        elif overall_progress >= 25:
-            progress_message = "🚀 **Good start!** Every step forward is bringing you closer to your dreams!"
-        else:
-            progress_message = "✨ **You've got this!** Every great journey starts with a single step!"
-        
-        st.info(progress_message)
-        
-        # Display overall metrics with friendly labels
-        col1, col2, col3 = st.columns(3)
+        # Enhanced metrics display
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric("🎯 Total Dream Amount", f"RM{total_target:.2f}")
+            st.metric("🎯 Active Goals", len(goals))
         
         with col2:
-            st.metric("💰 Total Saved", f"RM{total_saved:.2f}")
+            st.metric("🏆 Completed", completed_goals)
         
         with col3:
+            st.metric("💰 Total Saved", f"RM{total_saved:,.2f}")
+        
+        with col4:
             st.metric("📊 Overall Progress", f"{overall_progress:.1f}%")
         
-        st.markdown("---")
+        # Enhanced motivation message
+        if completed_goals > 0:
+            st.balloons()
+            st.success(f"🎉 **INCREDIBLE!** You've completed {completed_goals} goal{'s' if completed_goals > 1 else ''}! You're building an amazing financial future!")
+        elif overall_progress >= 75:
+            st.info("🔥 **OUTSTANDING!** You're making fantastic progress! Keep up this incredible momentum!")
+        elif overall_progress >= 50:
+            st.info("📈 **EXCELLENT WORK!** You're over halfway to your dreams! The momentum is building!")
+        elif overall_progress >= 25:
+            st.info("🎯 **GREAT START!** You're building solid foundations for your financial future!")
+        else:
+            st.info("🌱 **EVERY JOURNEY STARTS SOMEWHERE!** You've taken the hardest step - getting started!")
         
-        # Display individual goals with enhanced personality and details
-        for goal in goals:
-            progress = get_goal_progress(goal)
+        st.divider()
+        
+        # Enhanced individual goal display
+        for i, goal in enumerate(goals):
+            progress = get_enhanced_goal_progress(goal)
+            suggestions = get_smart_contribution_suggestions(goal, user_email)
             
-            # Friendly status icons for expandable headers
-            status_icon = "🎉" if progress["progress_percent"] >= 100 else "🔥" if progress["progress_percent"] >= 90 else "💪"
-            
-            with st.expander(f"{status_icon} {goal['goal_name']} - {progress['status']}", expanded=True):
-                # Goal details with encouraging language
+            # Create goal container
+            with st.container():
+                # Goal header with enhanced info
+                col1, col2, col3 = st.columns([3, 1, 1])
+                
+                with col1:
+                    icon = progress['current_milestone']['icon'] if progress.get('current_milestone') else '🎯'
+                    st.subheader(f"{icon} {goal['goal_name']}")
+                    st.caption(f"**Goal Type:** {goal['goal_type'].replace('_', ' ').title()}")
+                
+                with col2:
+                    st.metric("Progress", f"{progress['progress_percent']:.1f}%")
+                
+                with col3:
+                    if progress['status_color'] == 'success':
+                        st.success(f"**{progress['status']}**")
+                    elif progress['status_color'] == 'warning':
+                        st.warning(f"**{progress['status']}**")
+                    elif progress['status_color'] == 'error':
+                        st.error(f"**{progress['status']}**")
+                    else:
+                        st.info(f"**{progress['status']}**")
+                
+                # Enhanced progress bar
+                st.progress(progress['progress_percent'] / 100, text=f"RM{goal['current_amount']:,.0f} / RM{goal['target_amount']:,.0f}")
+                
+                # Goal details and insights
                 col1, col2 = st.columns([2, 1])
                 
                 with col1:
-                    st.write(f"**🎯 Goal Type:** {goal['goal_type'].replace('_', ' ').title()}")
-                    st.write(f"**💰 Target Amount:** RM{goal['target_amount']:.2f}")
-                    st.write(f"**💵 Current Savings:** RM{goal['current_amount']:.2f}")
-                    st.write(f"**📅 Target Date:** {goal['target_date']}")
+                    st.write(f"💭 **Status:** {progress['status_msg']}")
+                    st.write(f"🎯 **Next Action:** {progress['next_action']}")
                     
-                    # Display detailed goal information
-                    details_display = format_goal_details_display(goal)
-                    if details_display:
-                        st.markdown("---")
-                        st.markdown(details_display)
+                    # Show milestone achievement
+                    if progress.get("current_milestone"):
+                        st.write(f"🏅 **Milestone:** {progress['current_milestone']['message']}")
+                    
+                    # Progress insights
+                    if progress["velocity_status"] == "ahead":
+                        st.success(f"🚀 You're saving faster than needed! At this pace, you'll finish early!")
+                    elif progress["velocity_status"] == "behind":
+                        st.warning(f"⚡ Consider increasing contributions to stay on track!")
                 
                 with col2:
-                    st.write(f"**🎁 Remaining:** RM{progress['remaining_amount']:.2f}")
-                    st.write(f"**⏰ Days Left:** {progress['days_remaining']} days")
+                    st.write(f"**💰 Remaining:** RM{progress['remaining_amount']:,.2f}")
+                    st.write(f"**📅 Days Left:** {progress['days_remaining']} days")
                     if progress['days_remaining'] > 0:
-                        st.write(f"**💡 Suggested Monthly:** RM{progress['required_monthly']:.2f}")
-                    st.write(f"**📈 Progress:** {progress['progress_percent']:.1f}%")
+                        st.write(f"**💡 Weekly Target:** RM{progress['weekly_target']:.2f}")
+                        st.write(f"**📈 Daily Target:** RM{progress['daily_target']:.2f}")
                 
-                # Progress bar with encouraging message
-                st.progress(progress['progress_percent'] / 100)
-                st.write(f"💭 **{progress['status_msg']}**")
+                # Enhanced goal details
+                details_display = format_goal_details_display(goal)
+                if details_display:
+                    with st.expander("📋 Goal Details", expanded=False):
+                        st.markdown(details_display)
                 
-                # Enhanced contribution form
-                with st.form(f"contribution_form_{goal['id']}"):
-                    st.write("**🚀 Boost Your Progress**")
+                # Smart contribution section
+                with st.expander("💰 Make a Contribution", expanded=False):
+                    contrib_col1, contrib_col2 = st.columns([2, 1])
                     
-                    col1, col2 = st.columns([2, 1])
-                    with col1:
-                        contribution_amount = st.number_input(
-                            "Add to your savings (RM)", 
-                            min_value=0.0, 
-                            format="%.2f", 
-                            key=f"contrib_{goal['id']}",
-                            help="Every contribution brings you closer to your goal! 💪"
-                        )
-                    
-                    with col2:
+                    with contrib_col1:
+                        st.write("**🚀 Smart Contribution Suggestions:**")
+                        
                         # Quick amount buttons
-                        st.write("**Quick Add:**")
-                        if st.form_submit_button("RM50", key=f"quick50_{goal['id']}"):
-                            contribution_amount = 50.0
-                        if st.form_submit_button("RM100", key=f"quick100_{goal['id']}"):
-                            contribution_amount = 100.0
+                        if suggestions:
+                            button_cols = st.columns(min(4, len(suggestions)))
+                            for idx, suggestion in enumerate(suggestions[:4]):
+                                with button_cols[idx]:
+                                    if st.button(f"RM{suggestion['amount']:.0f}", 
+                                               key=f"quick_{goal['id']}_{idx}", 
+                                               help=suggestion['description'],
+                                               use_container_width=True):
+                                        success = add_goal_contribution(goal['id'], user_email, suggestion['amount'], f"Quick contribution: {suggestion['description']}")
+                                        if success:
+                                            st.success(f"🎉 Added RM{suggestion['amount']:.2f}!")
+                                            st.rerun()
+                        
+                        # Custom amount form
+                        with st.form(f"contrib_form_{goal['id']}"):
+                            custom_amount = st.number_input("Custom Amount (RM)", min_value=0.0, format="%.2f", key=f"custom_{goal['id']}")
+                            contrib_note = st.text_input("Note (optional)", placeholder="e.g., Birthday money, side hustle earnings")
+                            
+                            if st.form_submit_button("💫 Add Contribution", type="primary", use_container_width=True):
+                                if custom_amount > 0:
+                                    success = add_goal_contribution(goal['id'], user_email, custom_amount, contrib_note or f"Custom contribution")
+                                    if success:
+                                        st.balloons()
+                                        st.success(f"🎉 Amazing! Added RM{custom_amount:.2f} to {goal['goal_name']}!")
+                                        st.rerun()
+                                else:
+                                    st.error("Please enter an amount to contribute! Every ringgit counts!")
                     
-                    contribution_note = st.text_input(
-                        "Optional note", 
-                        key=f"note_{goal['id']}",
-                        placeholder="e.g., 'Bonus money', 'Savings from lunch'"
-                    )
-                    
-                    if st.form_submit_button("💰 Add Contribution", type="primary"):
-                        if contribution_amount > 0:
-                            success = add_goal_contribution(
-                                goal['id'], 
-                                user_email, 
-                                contribution_amount, 
-                                contribution_note or f"Added via Goals page on {datetime.now().strftime('%Y-%m-%d')}"
-                            )
-                            if success:
-                                st.success(f"🎉 Amazing! Added RM{contribution_amount:.2f} to {goal['goal_name']}! You're making your dreams happen!")
-                                st.rerun()
-                            else:
-                                st.error("Oops! Something went wrong. Please try again! 😅")
+                    with contrib_col2:
+                        st.write("**📊 Contribution Impact:**")
+                        if custom_amount and custom_amount > 0:
+                            new_progress = ((goal['current_amount'] + custom_amount) / goal['target_amount']) * 100
+                            st.write(f"New Progress: {new_progress:.1f}%")
+                            st.write(f"Remaining: RM{goal['target_amount'] - goal['current_amount'] - custom_amount:.2f}")
                         else:
-                            st.error("Please enter an amount to contribute! Every ringgit counts! 💫")
+                            st.info("Enter an amount above to see the impact!")
+                
+                st.divider()
     
     else:
-        # Enhanced empty state with encouragement
+        # Enhanced empty state
+        st.info("🎯 **Welcome to Your Goals Journey!**")
+        st.write("Turn your dreams into achievable financial plans!")
+        
         st.markdown("""
-        ### Welcome to Your Goals Journey! 🎯✨
+        ### 🌟 Why Set Financial Goals?
         
-        **You haven't set any financial goals yet, but that's totally fine!** Everyone starts somewhere, and you're already in the right place! 
+        **Goals transform wishes into reality!** Here's why you should start today:
         
-        🌟 **Why set financial goals?**
-        - Turn your dreams into actionable plans
-        - Stay motivated with clear targets  
-        - Track your progress and celebrate wins
-        - Build better saving habits
-        
-        🚀 **Ready to get started?** Let's create your first goal below!
+        🎯 **Clear Direction** - Know exactly what you're saving for  
+        💪 **Stay Motivated** - Track progress and celebrate wins  
+        📈 **Build Discipline** - Develop consistent saving habits  
+        🏆 **Achieve More** - People with written goals achieve 42% more!  
         """)
     
-    # Enhanced goal creation form with detailed specifications
-    st.markdown("---")
+    # Enhanced goal creation form
+    st.divider()
     st.subheader("✨ Create Your Next Goal")
     
-    with st.form("new_goal_form"):
-        st.write("**Turn your dreams into achievable plans! 🎯**")
+    # Goal template suggestions
+    st.write("### 🚀 Popular Goal Templates")
+    
+    template_cols = st.columns(3)
+    for idx, (template_key, template) in enumerate(list(goal_templates.items())[:3]):
+        with template_cols[idx % 3]:
+            with st.container():
+                st.info(f"**{template['icon']} {template['name']}**")
+                st.caption(template['description'])
+                st.write(f"**Amount Range:** RM{min(template['suggested_amounts']):,} - RM{max(template['suggested_amounts']):,}")
+                st.caption(f"💡 {template['tips']}")
+                
+                if st.button(f"Use {template['name']} Template", key=f"template_{template_key}", use_container_width=True):
+                    st.session_state[f"selected_template"] = template_key
+                    st.rerun()
+    
+    # Enhanced goal creation form
+    with st.form("enhanced_goal_form"):
+        st.write("### 🎯 Create Custom Goal")
         
-        # Basic goal information
+        # Check if template was selected
+        selected_template_key = st.session_state.get("selected_template")
+        selected_template = goal_templates.get(selected_template_key) if selected_template_key else None
+        
         col1, col2 = st.columns(2)
         
         with col1:
             goal_name = st.text_input(
-                "🎯 What's your goal?", 
-                placeholder="e.g., Emergency Fund, Dream Vacation, New Car",
-                help="Give your goal a name that excites you!"
+                "🎯 Goal Name", 
+                value=selected_template["name"] if selected_template else "",
+                placeholder="e.g., Dream Vacation to Japan",
+                help="Give your goal an inspiring name!"
             )
             
             goal_type = st.selectbox("📂 Goal Category", [
                 "emergency_fund", "vacation", "car", "house", "electronics", 
                 "education", "debt_payoff", "investment", "wedding", "other"
-            ], format_func=lambda x: {
+            ], 
+            index=list(goal_templates.keys()).index(selected_template_key) if selected_template_key and selected_template_key in goal_templates else 0,
+            format_func=lambda x: {
                 "emergency_fund": "💰 Emergency Fund",
                 "vacation": "🏖️ Vacation", 
                 "car": "🚗 Car",
@@ -3406,54 +3717,72 @@ elif page == "Goals":
                 "other": "📦 Other"
             }[x])
             
-            target_amount = st.number_input(
-                "💰 How much do you need?", 
-                min_value=0.0, 
-                format="%.2f",
-                help="Your target amount - dream big!"
-            )
+            # Smart amount suggestions
+            if selected_template:
+                suggested_amount = st.selectbox(
+                    "💰 Suggested Amounts",
+                    selected_template["suggested_amounts"],
+                    format_func=lambda x: f"RM{x:,}"
+                )
+                target_amount = st.number_input("💰 Or Enter Custom Amount", value=float(suggested_amount), min_value=0.0, format="%.2f")
+            else:
+                target_amount = st.number_input("💰 Target Amount", min_value=0.0, format="%.2f")
         
         with col2:
             target_date = st.date_input(
-                "📅 When do you want to achieve this?", 
+                "📅 Target Date", 
                 min_value=datetime.now().date(),
-                help="Having a deadline keeps you motivated!"
+                value=datetime.now().date() + timedelta(days=365),
+                help="When do you want to achieve this goal?"
             )
+            
+            # Smart timeline suggestions
+            if selected_template:
+                suggested_months = st.selectbox(
+                    "⏰ Suggested Timeline",
+                    selected_template["timeline_months"],
+                    format_func=lambda x: f"{x} months"
+                )
+                if st.checkbox("Use suggested timeline"):
+                    target_date = datetime.now().date() + timedelta(days=suggested_months * 30)
             
             monthly_contribution = st.number_input(
-                "📈 Monthly contribution (optional)", 
+                "📈 Planned Monthly Savings", 
                 min_value=0.0, 
                 format="%.2f",
-                help="How much can you save each month?"
+                help="How much can you save monthly?"
             )
+        
+        # Goal feasibility analysis
+        if target_amount > 0:
+            feasibility = calculate_goal_feasibility(target_amount, target_date, user_email)
+            priority = get_goal_priority_suggestion(user_email, goal_type)
             
-            # Smart calculation display
-            if target_amount > 0 and monthly_contribution > 0:
-                months_needed = target_amount / monthly_contribution
-                
-                if months_needed <= 12:
-                    st.success(f"🎯 **Great plan!** At RM{monthly_contribution:.2f}/month, you'll reach your goal in {months_needed:.1f} months!")
+            st.write("### 📊 Goal Analysis")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if feasibility['difficulty'] == 'easy':
+                    st.success(f"**Feasibility:** {feasibility['feasibility']}\n\n{feasibility['message']}")
+                elif feasibility['difficulty'] == 'medium':
+                    st.info(f"**Feasibility:** {feasibility['feasibility']}\n\n{feasibility['message']}")
+                elif feasibility['difficulty'] == 'hard':
+                    st.warning(f"**Feasibility:** {feasibility['feasibility']}\n\n{feasibility['message']}")
                 else:
-                    st.info(f"📊 At RM{monthly_contribution:.2f}/month, you'll need {months_needed:.1f} months. Consider increasing monthly savings for faster results!")
+                    st.error(f"**Feasibility:** {feasibility['feasibility']}\n\n{feasibility['message']}")
             
-            elif target_amount > 0:
-                # Calculate suggested monthly amount based on target date
-                days_until = (target_date - datetime.now().date()).days
-                if days_until > 0:
-                    months_until = days_until / 30.44
-                    suggested_monthly = target_amount / months_until
-                    st.info(f"💡 **Suggestion:** Save RM{suggested_monthly:.2f}/month to reach your goal by {target_date.strftime('%B %Y')}!")
+            with col2:
+                st.info(f"**Priority Suggestion:**\n\n{priority}")
         
-        # Enhanced goal details section
-        st.markdown("---")
-        st.markdown("### 📋 Goal Details (Optional but Recommended)")
-        st.markdown("*Adding details helps you stay motivated and focused on your specific goal!*")
+        # Enhanced goal details
+        st.divider()
+        st.write("### 📋 Goal Details (Highly Recommended)")
+        st.caption("*Adding specific details makes your goal 10x more likely to be achieved!*")
         
-        # Get detailed form fields based on goal type
         goal_details = get_goal_details_form(goal_type)
         
         # Enhanced submit button
-        if st.form_submit_button("🚀 Create My Detailed Goal!", type="primary"):
+        if st.form_submit_button("🚀 Create My Amazing Goal!", type="primary", use_container_width=True):
             if goal_name and target_amount > 0:
                 target_date_str = target_date.strftime("%Y-%m-%d")
                 success, goal_id = add_goal(
@@ -3462,13 +3791,17 @@ elif page == "Goals":
                 )
                 
                 if success:
-                    st.balloons()  # Celebration animation!
-                    st.success(f"🎉 **Congratulations!** Your detailed '{goal_name}' goal is now live! You're officially on the path to making your dreams come true! 🌟")
+                    # Clear template selection
+                    if "selected_template" in st.session_state:
+                        del st.session_state["selected_template"]
+                    
+                    st.balloons()
+                    st.success("🎉 **GOAL CREATED!** Your dream is now a plan! Let's make it happen!")
                     st.rerun()
                 else:
-                    st.error("Oops! Something went wrong creating your goal. Please try again! 😅")
+                    st.error("Oops! Something went wrong. Please try again!")
             else:
-                st.error("Please fill in your goal name and target amount to get started! 💪")
+                st.error("Please fill in the goal name and target amount!")
 
 elif page == "About":
     st.header("About Personal Finance Chatbot")
