@@ -1333,148 +1333,150 @@ def process_user_input(input_text, user_email):
 
     # Handle responses in the middle of budget conversation
     # Handle responses in the middle of budget conversation
+    # Handle responses in the middle of budget conversation
     elif "budget_conversation" in st.session_state:
         stage = st.session_state.budget_conversation["stage"]
-    input_lower = input_text.lower()
-    
-    # First, check if user wants to cancel or change their mind
-    cancel_words = ["cancel", "stop", "nevermind", "never mind", "forget it", "change mind"]
-    if any(word in input_lower for word in cancel_words):
-        del st.session_state.budget_conversation
-        return "Okay, cancelled the budget setting. What would you like to do instead?"
-    
-    # Check if user is trying to specify a different category
-    category_keywords = {
-        "food": ["food", "grocery", "restaurant", "lunch", "dinner", "breakfast"],
-        "transport": ["transport", "bus", "train", "taxi", "grab", "gas", "fuel"],
-        "entertainment": ["entertainment", "movie", "cinema", "game", "fun"],
-        "shopping": ["shopping", "clothes", "mall", "store"],
-        "utilities": ["utilities", "bill", "electric", "water", "internet"],
-        "housing": ["housing", "rent", "mortgage", "home"],
-        "healthcare": ["healthcare", "medical", "doctor", "hospital"],
-        "education": ["education", "school", "book", "tuition"],
-        "other": ["other", "misc"]
-    }
-    
-    detected_category = None
-    for category, keywords in category_keywords.items():
-        for keyword in keywords:
-            if keyword in input_lower:
-                detected_category = category
+        input_lower = input_text.lower()
+        
+        # First, check if user wants to cancel or change their mind
+        cancel_words = ["cancel", "stop", "nevermind", "never mind", "forget it", "change mind"]
+        if any(word in input_lower for word in cancel_words):
+            del st.session_state.budget_conversation
+            return "Okay, cancelled the budget setting. What would you like to do instead?"
+        
+        # Check if user is trying to specify a different category
+        category_keywords = {
+            "food": ["food", "grocery", "restaurant", "lunch", "dinner", "breakfast"],
+            "transport": ["transport", "bus", "train", "taxi", "grab", "gas", "fuel"],
+            "entertainment": ["entertainment", "movie", "cinema", "game", "fun"],
+            "shopping": ["shopping", "clothes", "mall", "store"],
+            "utilities": ["utilities", "bill", "electric", "water", "internet"],
+            "housing": ["housing", "rent", "mortgage", "home"],
+            "healthcare": ["healthcare", "medical", "doctor", "hospital"],
+            "education": ["education", "school", "book", "tuition"],
+            "other": ["other", "misc"]
+        }
+        
+        detected_category = None
+        for category, keywords in category_keywords.items():
+            for keyword in keywords:
+                if keyword in input_lower:
+                    detected_category = category
+                    break
+            if detected_category:
                 break
-        if detected_category:
-            break
-    
-    # If user specified a new category during the conversation AND it's clearly a change request
-    if detected_category and is_category_change_request(input_lower):
-        if stage == "ask_amount":
-            # User changed their mind about category
-            st.session_state.budget_conversation["category"] = detected_category
-            return f"Okay, changed to {detected_category.title()}. How much would you like to budget for {detected_category.title()}? (e.g., RM500)"
-        elif stage == "confirm":
-            # User changed their mind during confirmation
-            st.session_state.budget_conversation["category"] = detected_category
-            st.session_state.budget_conversation["stage"] = "ask_amount"
-            return f"Okay, changed to {detected_category.title()}. How much would you like to budget for {detected_category.title()}? (e.g., RM500)"
-        else:
-            # If we're in ask_category stage but user specified a category, use it
-            st.session_state.budget_conversation["category"] = detected_category
-            st.session_state.budget_conversation["stage"] = "ask_amount"
-            return f"Sure! How much would you like to budget for {detected_category.title()}? (e.g., RM500)"
-    
-    # Normal conversation flow
-    if stage == "ask_category":
-        # User is providing a category
-        category = input_text.lower().strip()
         
-        # Simple category mapping
-        if "food" in category or "grocery" in category or "restaurant" in category:
-            selected_category = "food"
-        elif "transport" in category or "bus" in category or "train" in category or "taxi" in category:
-            selected_category = "transport"
-        elif "entertainment" in category or "movie" in category or "game" in category:
-            selected_category = "entertainment"
-        elif "shopping" in category or "clothes" in category or "mall" in category:
-            selected_category = "shopping"
-        elif "utilities" in category or "bill" in category or "electric" in category:
-            selected_category = "utilities"
-        elif "housing" in category or "rent" in category or "mortgage" in category:
-            selected_category = "housing"
-        elif "health" in category or "medical" in category or "doctor" in category:
-            selected_category = "healthcare"
-        elif "education" in category or "school" in category or "book" in category:
-            selected_category = "education"
-        else:
-            selected_category = "other"
-        
-        # Store the category and move to next stage
-        st.session_state.budget_conversation["category"] = selected_category
-        st.session_state.budget_conversation["stage"] = "ask_amount"
-        return f"Sure! How much would you like to budget for {selected_category.title()}? (e.g., RM500)"
-    
-    elif stage == "ask_amount":
-        # User is responding with an amount
-        amount_match = re.search(r"(\d+\.?\d*)", input_text)
-        if amount_match:
-            try:
-                amount = float(amount_match.group(1))
-                # Store the amount and move to confirmation stage
-                st.session_state.budget_conversation["amount"] = amount
-                st.session_state.budget_conversation["stage"] = "confirm"
-                
-                category = st.session_state.budget_conversation["category"]
-                return f"Confirm: Set budget of RM{amount:.2f} for {category.title()}? Type 'YES' to confirm or 'NO' to cancel."
-            except ValueError:
-                return "I couldn't understand that amount. Please provide a number like '500' or '500.50'."
-        else:
-            # If no amount found, check if user wants to change category
-            if "change" in input_lower or "different" in input_lower:
-                st.session_state.budget_conversation["stage"] = "ask_category"
-                return "Which category would you like to set a budget for instead? (Food, Transport, Entertainment, Shopping, Utilities, Housing, Healthcare, Education, Other)"
-            else:
-                # If it's not a category change and not an amount, process as normal query
-                intent_tag, confidence = predict_intent(input_text, intents)
-                return get_response(intent_tag, input_text, user_email)
-    
-    elif stage == "confirm":
-        # User is confirming the budget
-        if input_text.lower() in ["yes", "y", "confirm", "ok"]:
-            # Get the budget details
-            category = st.session_state.budget_conversation["category"]
-            amount = st.session_state.budget_conversation["amount"]
-            month = datetime.now().strftime("%B")
-            year = datetime.now().year
-            
-            # Set the budget
-            success = set_budget(user_email, category, amount, month, year)
-            
-            # Clear the conversation state
-            del st.session_state.budget_conversation
-            
-            if success:
-                return f"Great! ✅ I've set your budget for {category.title()} to RM{amount:.2f} for {month} {year}."
-            else:
-                return "Sorry, I couldn't set that budget. Please try again."
-        
-        elif input_text.lower() in ["no", "n", "cancel"]:
-            # Clear the conversation state
-            del st.session_state.budget_conversation
-            return "Budget setting cancelled. What would you like to do instead?"
-        
-        else:
-            # Check if user wants to change amount or category during confirmation
-            if "change amount" in input_lower or "different amount" in input_lower:
+        # If user specified a new category during the conversation AND it's clearly a change request
+        if detected_category and is_category_change_request(input_lower):
+            if stage == "ask_amount":
+                # User changed their mind about category
+                st.session_state.budget_conversation["category"] = detected_category
+                return f"Okay, changed to {detected_category.title()}. How much would you like to budget for {detected_category.title()}? (e.g., RM500)"
+            elif stage == "confirm":
+                # User changed their mind during confirmation
+                st.session_state.budget_conversation["category"] = detected_category
                 st.session_state.budget_conversation["stage"] = "ask_amount"
-                return f"How much would you like to budget for {st.session_state.budget_conversation['category'].title()} instead?"
-            elif "change category" in input_lower or "different category" in input_lower:
-                st.session_state.budget_conversation["stage"] = "ask_category"
-                return "Which category would you like to set a budget for instead? (Food, Transport, Entertainment, Shopping, Utilities, Housing, Healthcare, Education, Other)"
+                return f"Okay, changed to {detected_category.title()}. How much would you like to budget for {detected_category.title()}? (e.g., RM500)"
             else:
-                # If it's not a clear response, process as normal query
-                intent_tag, confidence = predict_intent(input_text, intents)
-                return get_response(intent_tag, input_text, user_email)
+                # If we're in ask_category stage but user specified a category, use it
+                st.session_state.budget_conversation["category"] = detected_category
+                st.session_state.budget_conversation["stage"] = "ask_amount"
+                return f"Sure! How much would you like to budget for {detected_category.title()}? (e.g., RM500)"
+        
+        # Normal conversation flow
+        if stage == "ask_category":
+            # User is providing a category
+            category = input_text.lower().strip()
+            
+            # Simple category mapping
+            if "food" in category or "grocery" in category or "restaurant" in category:
+                selected_category = "food"
+            elif "transport" in category or "bus" in category or "train" in category or "taxi" in category:
+                selected_category = "transport"
+            elif "entertainment" in category or "movie" in category or "game" in category:
+                selected_category = "entertainment"
+            elif "shopping" in category or "clothes" in category or "mall" in category:
+                selected_category = "shopping"
+            elif "utilities" in category or "bill" in category or "electric" in category:
+                selected_category = "utilities"
+            elif "housing" in category or "rent" in category or "mortgage" in category:
+                selected_category = "housing"
+            elif "health" in category or "medical" in category or "doctor" in category:
+                selected_category = "healthcare"
+            elif "education" in category or "school" in category or "book" in category:
+                selected_category = "education"
+            else:
+                selected_category = "other"
+            
+            # Store the category and move to next stage
+            st.session_state.budget_conversation["category"] = selected_category
+            st.session_state.budget_conversation["stage"] = "ask_amount"
+            return f"Sure! How much would you like to budget for {selected_category.title()}? (e.g., RM500)"
+        
+        elif stage == "ask_amount":
+            # User is responding with an amount
+            amount_match = re.search(r"(\d+\.?\d*)", input_text)
+            if amount_match:
+                try:
+                    amount = float(amount_match.group(1))
+                    # Store the amount and move to confirmation stage
+                    st.session_state.budget_conversation["amount"] = amount
+                    st.session_state.budget_conversation["stage"] = "confirm"
+                    
+                    category = st.session_state.budget_conversation["category"]
+                    return f"Confirm: Set budget of RM{amount:.2f} for {category.title()}? Type 'YES' to confirm or 'NO' to cancel."
+                except ValueError:
+                    return "I couldn't understand that amount. Please provide a number like '500' or '500.50'."
+            else:
+                # If no amount found, check if user wants to change category
+                if "change" in input_lower or "different" in input_lower:
+                    st.session_state.budget_conversation["stage"] = "ask_category"
+                    return "Which category would you like to set a budget for instead? (Food, Transport, Entertainment, Shopping, Utilities, Housing, Healthcare, Education, Other)"
+                else:
+                    # If it's not a category change and not an amount, process as normal query
+                    intent_tag, confidence = predict_intent(input_text, intents)
+                    return get_response(intent_tag, input_text, user_email)
+        
+        elif stage == "confirm":
+            # User is confirming the budget
+            if input_text.lower() in ["yes", "y", "confirm", "ok"]:
+                # Get the budget details
+                category = st.session_state.budget_conversation["category"]
+                amount = st.session_state.budget_conversation["amount"]
+                month = datetime.now().strftime("%B")
+                year = datetime.now().year
+                
+                # Set the budget
+                success = set_budget(user_email, category, amount, month, year)
+                
+                # Clear the conversation state
+                del st.session_state.budget_conversation
+                
+                if success:
+                    return f"Great! ✅ I've set your budget for {category.title()} to RM{amount:.2f} for {month} {year}."
+                else:
+                    return "Sorry, I couldn't set that budget. Please try again."
+            
+            elif input_text.lower() in ["no", "n", "cancel"]:
+                # Clear the conversation state
+                del st.session_state.budget_conversation
+                return "Budget setting cancelled. What would you like to do instead?"
+            
+            else:
+                # Check if user wants to change amount or category during confirmation
+                if "change amount" in input_lower or "different amount" in input_lower:
+                    st.session_state.budget_conversation["stage"] = "ask_amount"
+                    return f"How much would you like to budget for {st.session_state.budget_conversation['category'].title()} instead?"
+                elif "change category" in input_lower or "different category" in input_lower:
+                    st.session_state.budget_conversation["stage"] = "ask_category"
+                    return "Which category would you like to set a budget for instead? (Food, Transport, Entertainment, Shopping, Utilities, Housing, Healthcare, Education, Other)"
+                else:
+                    # If it's not a clear response, process as normal query
+                    intent_tag, confidence = predict_intent(input_text, intents)
+                    return get_response(intent_tag, input_text, user_email)
             
                 # Handle budget query requests
+        # Handle budget query requests - ENHANCED VERSION
     if intent_tag == "budget_query":
         input_lower = input_text.lower()
         
@@ -1482,7 +1484,7 @@ def process_user_input(input_text, user_email):
         category_keywords = {
             "food": ["food", "grocery", "eating", "restaurant"],
             "transport": ["transport", "bus", "train", "taxi", "gas", "fuel"],
-            "enttainment": ["entertainment", "movie", "game", "fun"],
+            "entertainment": ["entertainment", "movie", "game", "fun"],
             "shopping": ["shopping", "clothes", "mall", "store"],
             "utilities": ["utilities", "bill", "electric", "water", "internet"],
             "housing": ["housing", "rent", "mortgage", "home"],
@@ -1503,14 +1505,73 @@ def process_user_input(input_text, user_email):
         all_keywords = ["all", "every", "each", "overview", "summary", "show my budget", "check my budget", "my budgets"]
         show_all = any(keyword in input_lower for keyword in all_keywords)
         
+        # Get current month and year
+        current_month = datetime.now().strftime("%B")
+        current_year = datetime.now().year
+        
+        # Get budgets and spending data
+        budgets = get_budgets(user_email, current_month, current_year)
+        spending = get_spending_by_category(user_email, current_month, current_year)
+        
+        if not budgets:
+            return "No budgets set up yet. You can set a budget by saying something like 'Set a RM500 budget for food'."
+        
+        budget_text = ""
+        
         if specific_category and not show_all:
-            # Show specific category budget
-            budget_status = get_budget_status(user_email, specific_category)
-            return budget_status
+            # Show specific category budget - format like Budget Tracking page
+            found_budget = False
+            for budget in budgets:
+                if budget["category"] == specific_category:
+                    budget_amount = budget["amount"]
+                    spent = spending.get(specific_category, 0)
+                    remaining = budget_amount - spent
+                    percent_used = (spent / budget_amount) * 100 if budget_amount > 0 else 0
+                    
+                    status = "🟢 Good" if percent_used < 80 else "🟠 Watch" if percent_used < 100 else "🔴 Over"
+                    
+                    budget_text = f"**{specific_category.title()} Budget for {current_month} {current_year}:**\n\n"
+                    budget_text += f"• **Budget**: RM{budget_amount:.2f}\n"
+                    budget_text += f"• **Spent**: RM{spent:.2f}\n"
+                    budget_text += f"• **Remaining**: RM{remaining:.2f}\n"
+                    budget_text += f"• **Used**: {percent_used:.1f}%\n"
+                    budget_text += f"• **Status**: {status}\n"
+                    found_budget = True
+                    break
+            
+            if not found_budget:
+                budget_text = f"No budget set for {specific_category.title()} yet. You can set one by saying 'Set a budget for {specific_category}'."
         else:
-            # Show all budgets
-            budget_status = get_budget_status(user_email)
-            return budget_status
+            # Show all budgets - format like Budget Tracking page
+            budget_text = f"**Your Current Budgets for {current_month} {current_year}:**\n\n"
+            total_budget = 0
+            total_spent = 0
+            
+            for budget in budgets:
+                category_name = budget["category"]
+                budget_amount = budget["amount"]
+                spent = spending.get(category_name, 0)
+                remaining = budget_amount - spent
+                percent_used = (spent / budget_amount) * 100 if budget_amount > 0 else 0
+                
+                status = "🟢 Good" if percent_used < 80 else "🟠 Watch" if percent_used < 100 else "🔴 Over"
+                
+                budget_text += f"**{category_name.title()}**\n"
+                budget_text += f"• Budget: RM{budget_amount:.2f} | Spent: RM{spent:.2f} | Remaining: RM{remaining:.2f}\n"
+                budget_text += f"• Used: {percent_used:.1f}% | Status: {status}\n\n"
+                
+                total_budget += budget_amount
+                total_spent += spent
+            
+            # Add totals
+            total_remaining = total_budget - total_spent
+            total_percent = (total_spent / total_budget) * 100 if total_budget > 0 else 0
+            budget_text += f"**Summary:**\n"
+            budget_text += f"• Total Budget: RM{total_budget:.2f}\n"
+            budget_text += f"• Total Spent: RM{total_spent:.2f} ({total_percent:.1f}%)\n"
+            budget_text += f"• Total Remaining: RM{total_remaining:.2f}"
+        
+        return budget_text
 
     # Get response based on intent for all other intents
     try:

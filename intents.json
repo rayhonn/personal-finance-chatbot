@@ -1,4 +1,4 @@
-{
+ {
     "intents": [
         {
             "tag": "greeting",
@@ -98,7 +98,39 @@
                 "budget overview",
                 "check budget",
                 "show budget",
-                "view budget"
+                "view budget",
+                "show my budget",
+                "show my all budget",
+                "show all budget",
+                "my budget",
+                "all budget",
+                "show my food budget",
+                "show food budget",
+                "food budget",
+                "show my transport budget",
+                "show transport budget",
+                "transport budget",
+                "show my entertainment budget",
+                "show entertainment budget",
+                "entertainment budget",
+                "show my shopping budget",
+                "show shopping budget",
+                "shopping budget",
+                "show my utilities budget",
+                "show utilities budget",
+                "utilities budget",
+                "show my housing budget",
+                "show housing budget",
+                "housing budget",
+                "show my healthcare budget",
+                "show healthcare budget",
+                "healthcare budget",
+                "show my education budget",
+                "show education budget",
+                "education budget",
+                "show my other budget",
+                "show other budget",
+                "other budget"
             ],
             "responses": [
                 "Here's your budget overview for {month} {year}:\n\n{budgets}\n\nWould you like to adjust any of your budgets?"
