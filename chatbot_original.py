@@ -10,38 +10,15 @@ import sqlite3
 import os
 from datetime import datetime, timedelta
 import random
-from typing import Dict, List, Optional, Tuple
 
-# Import our enhanced systems
-from database_schema import DatabaseManager
-from income_manager import IncomeManager
-from financial_analytics import FinancialAnalytics
-from expense_intelligence import ExpenseIntelligence
+# Set page configuration
+st.set_page_config(page_title="Personal Finance Chatbot", page_icon="📊")
 
-# Set page configuration with enhanced features
-st.set_page_config(
-    page_title="Advanced Personal Finance Chatbot", 
-    page_icon="💰",
-    layout="wide",
-    initial_sidebar_state="expanded",
-    menu_items={
-        'Get Help': 'https://github.com/rayhonn/personal-finance-chatbot',
-        'Report a bug': 'https://github.com/rayhonn/personal-finance-chatbot/issues',
-        'About': "Advanced Personal Finance Chatbot - Your AI-powered financial advisor"
-    }
-)
-
-# ------------------------------- Enhanced Data Management -------------------------------
+# ------------------------------- Create folders to store data -------------------------------
 DATA_DIR = Path("finance_data")  # Create a folder path
 DATA_DIR.mkdir(exist_ok=True)    # Make the folder if it doesn't exist
 USER_DB_FILE = DATA_DIR / "users.json"  # This is where we'll store user info
-DB_PATH = DATA_DIR / "finance.db"  # SQLite database for all financial data
-
-# Initialize enhanced systems
-db_manager = DatabaseManager(DB_PATH)
-income_manager = IncomeManager(str(DB_PATH))
-financial_analytics = FinancialAnalytics(str(DB_PATH))
-expense_intelligence = ExpenseIntelligence(str(DB_PATH))
+DB_PATH = DATA_DIR / "finance.db"  # SQLite database for expenses
 
 # Initialize user database if it doesn't exist
 if not USER_DB_FILE.exists():
@@ -113,7 +90,7 @@ def clean_up_sentence(sentence):
     sentence_words = [lemmatize_word(word) for word in sentence_words]
     return sentence_words
 
-# Enhanced session state variables for advanced features
+# Initialize session state variables (do this early in the code)
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 if "current_user" not in st.session_state:
@@ -136,172 +113,8 @@ if "custom_categories" not in st.session_state:
     st.session_state.custom_categories = []
 if "debug_info" not in st.session_state:
     st.session_state.debug_info = ""
-# New enhanced session variables
-if "financial_health_score" not in st.session_state:
-    st.session_state.financial_health_score = None
-if "income_setup_complete" not in st.session_state:
-    st.session_state.income_setup_complete = False
-if "profile_completion_score" not in st.session_state:
-    st.session_state.profile_completion_score = 0
-if "conversation_context" not in st.session_state:
-    st.session_state.conversation_context = {}
-if "pending_confirmations" not in st.session_state:
-    st.session_state.pending_confirmations = {}
-if "notification_count" not in st.session_state:
-    st.session_state.notification_count = 0
 
-# ---------------------------- Enhanced Helper Functions ----------------------------
-
-def check_income_requirement_for_action(user_email: str, action_type: str, amount: float = 0) -> Tuple[bool, str]:
-    """Check if user has sufficient income setup for financial actions"""
-    monthly_income = income_manager.calculate_monthly_income(user_email)
-    
-    if monthly_income['total_monthly'] == 0:
-        return False, "⚠️ **Income Setup Required!** Please set up your income sources first before creating budgets or goals. This helps us provide better financial advice!"
-    
-    if action_type == "budget" and amount > 0:
-        return income_manager.has_sufficient_income_for_budget(user_email, amount)
-    elif action_type == "goal" and amount > 0:
-        target_months = 12  # Default assumption
-        return income_manager.has_sufficient_income_for_goal(user_email, amount, target_months)
-    
-    return True, "Income setup is sufficient for this action."
-
-def calculate_profile_completion_score(user_email: str) -> int:
-    """Calculate user's profile completion score"""
-    score = 0
-    
-    # Income sources (40 points)
-    income_sources = income_manager.get_user_income_sources(user_email)
-    if income_sources:
-        score += 40
-        if len(income_sources) > 1:
-            score += 10  # Bonus for diversification
-    
-    # Expense tracking (20 points)
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM expenses_enhanced WHERE user_email = ?", (user_email,))
-        expense_count = cursor.fetchone()[0]
-        if expense_count > 0:
-            score += 20
-        conn.close()
-    except:
-        pass
-    
-    # Budget setup (20 points)
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM budgets_enhanced WHERE user_email = ? AND is_active = 1", (user_email,))
-        budget_count = cursor.fetchone()[0]
-        if budget_count > 0:
-            score += 20
-        conn.close()
-    except:
-        pass
-    
-    # Goals setup (20 points)
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM goals_enhanced WHERE user_email = ? AND is_active = 1", (user_email,))
-        goal_count = cursor.fetchone()[0]
-        if goal_count > 0:
-            score += 20
-        conn.close()
-    except:
-        pass
-    
-    return min(score, 100)
-
-def get_user_notifications(user_email: str) -> List[Dict]:
-    """Get user's unread notifications"""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT id, notification_type, title, message, priority, created_at
-            FROM notifications
-            WHERE user_email = ? AND is_read = 0
-            ORDER BY 
-                CASE priority 
-                    WHEN 'urgent' THEN 1
-                    WHEN 'high' THEN 2
-                    WHEN 'medium' THEN 3
-                    ELSE 4
-                END,
-                created_at DESC
-            LIMIT 5
-        ''', (user_email,))
-        
-        notifications = []
-        for row in cursor.fetchall():
-            notifications.append({
-                'id': row[0],
-                'type': row[1],
-                'title': row[2],
-                'message': row[3],
-                'priority': row[4],
-                'created_at': row[5]
-            })
-        
-        conn.close()
-        return notifications
-        
-    except Exception as e:
-        print(f"Error getting notifications: {e}")
-        return []
-
-def add_notification(user_email: str, notification_type: str, title: str, message: str, priority: str = 'medium'):
-    """Add a new notification for the user"""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT INTO notifications (user_email, notification_type, title, message, priority)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (user_email, notification_type, title, message, priority))
-        
-        conn.commit()
-        conn.close()
-        
-    except Exception as e:
-        print(f"Error adding notification: {e}")
-
-def get_enhanced_user_dashboard_data(user_email: str) -> Dict:
-    """Get comprehensive dashboard data for the user"""
-    
-    # Calculate financial health score
-    health_score = financial_analytics.calculate_financial_health_score(user_email)
-    
-    # Get income summary
-    income_summary = income_manager.calculate_monthly_income(user_email)
-    
-    # Get spending insights
-    spending_insights = financial_analytics.get_spending_insights(user_email)
-    
-    # Get profile completion
-    profile_completion = calculate_profile_completion_score(user_email)
-    
-    # Get notifications
-    notifications = get_user_notifications(user_email)
-    
-    # Check for recurring expenses
-    recurring_expenses = expense_intelligence.detect_recurring_expenses(user_email)
-    
-    return {
-        'health_score': health_score,
-        'income_summary': income_summary,
-        'spending_insights': spending_insights,
-        'profile_completion': profile_completion,
-        'notifications': notifications,
-        'recurring_expenses': recurring_expenses[:3],  # Top 3
-        'income_setup_complete': income_summary['total_monthly'] > 0
-    }
+# ---------------------------- Database Functions ----------------------------
 # Initialize SQLite database
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -3160,49 +2973,7 @@ def create_annotated_chart(spending_data, title="Spending by Category"):
 
 # Only show page selection if authenticated
 if st.session_state.authenticated:
-    # Enhanced navigation with new pages
-    page = st.sidebar.selectbox("Choose a page", [
-        "🏠 Dashboard", 
-        "💰 Income Management", 
-        "📊 Spending Analysis", 
-        "🎯 Goals & Planning",
-        "📈 Budget Tracking", 
-        "💡 Financial Insights",
-        "⚙️ Settings",
-        "ℹ️ About"
-    ])
-    
-    # Enhanced sidebar with user info and quick stats
-    if st.session_state.current_user:
-        user_dashboard_data = get_enhanced_user_dashboard_data(st.session_state.current_user)
-        
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("💳 Quick Overview")
-        
-        # Profile completion
-        completion_score = user_dashboard_data['profile_completion']
-        st.sidebar.metric("Profile Completion", f"{completion_score}%")
-        
-        # Financial health score
-        if user_dashboard_data['health_score']:
-            health_score = user_dashboard_data['health_score'].overall_score
-            st.sidebar.metric("Financial Health", f"{health_score:.0f}/100")
-        
-        # Monthly income
-        monthly_income = user_dashboard_data['income_summary']['total_monthly']
-        if monthly_income > 0:
-            st.sidebar.metric("Monthly Income", f"RM{monthly_income:,.2f}")
-        else:
-            st.sidebar.warning("⚠️ Set up income first!")
-        
-        # Notifications
-        notifications = user_dashboard_data['notifications']
-        if notifications:
-            st.sidebar.markdown("---")
-            st.sidebar.subheader("🔔 Notifications")
-            for notif in notifications[:2]:  # Show top 2
-                priority_icon = "🔴" if notif['priority'] == 'urgent' else "🟡" if notif['priority'] == 'high' else "🔵"
-                st.sidebar.write(f"{priority_icon} {notif['title']}")
+    page = st.sidebar.selectbox("Choose a page", ["Home", "Spending Analysis", "Budget Tracking", "About"])
     
     # Add debug panel
     if st.sidebar.checkbox("Show Debug Info"):
@@ -3342,385 +3113,58 @@ if not st.session_state.authenticated:
                             st.rerun()
 
 # Create different pages based on selection if authenticated
-elif page == "🏠 Dashboard" or page == "Home":  # Support both for backward compatibility
-    # Enhanced Dashboard with comprehensive overview
+# In your Home page
+elif page == "Home":
+    # Get user name safely with a fallback
     user_info = load_users().get(st.session_state.current_user, {})
     user_name = user_info.get("name", "User")
     
-    # Get comprehensive dashboard data
-    dashboard_data = get_enhanced_user_dashboard_data(st.session_state.current_user)
-    
-    # Dashboard header with welcome and health score
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        st.header(f"Welcome back, {user_name}! 👋")
-        current_time = datetime.now().strftime("%A, %B %d, %Y")
-        st.caption(f"Today is {current_time}")
-    
-    with col2:
-        if dashboard_data['health_score']:
-            health_score = dashboard_data['health_score'].overall_score
-            
-            # Health score with color coding
-            if health_score >= 80:
-                color = "green"
-                emoji = "🟢"
-            elif health_score >= 60:
-                color = "orange"
-                emoji = "🟡"
-            else:
-                color = "red"
-                emoji = "🔴"
-            
-            st.metric(
-                label="Financial Health Score",
-                value=f"{health_score:.0f}/100",
-                help="Your overall financial health based on income, expenses, savings, and goals"
-            )
-            
-            # Add health score breakdown
-            with st.expander("📊 Health Score Breakdown"):
-                score = dashboard_data['health_score']
-                
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    st.metric("💰 Income Score", f"{score.income_score:.0f}/100")
-                    st.metric("📊 Expense Score", f"{score.expense_score:.0f}/100") 
-                    st.metric("💎 Saving Score", f"{score.saving_score:.0f}/100")
-                
-                with col_b:
-                    st.metric("🎯 Goal Score", f"{score.goal_score:.0f}/100")
-                    st.metric("💳 Debt Score", f"{score.debt_score:.0f}/100")
-                    st.metric("🚨 Emergency Fund", f"{score.emergency_fund_score:.0f}/100")
-                
-                # Recommendations
-                if score.recommendations:
-                    st.subheader("💡 Recommendations")
-                    for i, rec in enumerate(score.recommendations[:3], 1):
-                        st.write(f"{i}. {rec}")
-    
-    # Profile completion progress
-    completion_score = dashboard_data['profile_completion']
-    if completion_score < 100:
-        st.warning(f"📋 **Profile Completion: {completion_score}%** - Complete your profile for better insights!")
-        
-        progress_col1, progress_col2 = st.columns([3, 1])
-        with progress_col1:
-            st.progress(completion_score / 100)
-        with progress_col2:
-            if st.button("Complete Profile"):
-                if not dashboard_data['income_setup_complete']:
-                    st.switch_page = "💰 Income Management"
-    
-    # Quick action cards
-    st.subheader("🚀 Quick Actions")
-    action_col1, action_col2, action_col3, action_col4 = st.columns(4)
-    
-    with action_col1:
-        if st.button("💰 Add Income", use_container_width=True):
-            st.session_state.quick_action = "add_income"
-    
-    with action_col2:
-        if st.button("📝 Log Expense", use_container_width=True):
-            st.session_state.quick_action = "add_expense"
-    
-    with action_col3:
-        if st.button("🎯 Create Goal", use_container_width=True):
-            st.session_state.quick_action = "create_goal"
-    
-    with action_col4:
-        if st.button("📊 Set Budget", use_container_width=True):
-            st.session_state.quick_action = "set_budget"
-    
-    # Recent activity and insights
-    insight_col1, insight_col2 = st.columns(2)
-    
-    with insight_col1:
-        st.subheader("📈 Recent Insights")
-        
-        # Spending insights
-        spending_insights = dashboard_data['spending_insights']
-        if spending_insights['insights']:
-            for insight in spending_insights['insights'][:3]:
-                if insight['type'] == 'warning':
-                    st.warning(f"⚠️ {insight['message']}")
-                elif insight['type'] == 'info':
-                    st.info(f"ℹ️ {insight['message']}")
-                else:
-                    st.success(f"✅ {insight['message']}")
-        else:
-            st.info("Track more expenses to get personalized insights!")
-    
-    with insight_col2:
-        st.subheader("🔔 Notifications")
-        
-        notifications = dashboard_data['notifications']
-        if notifications:
-            for notif in notifications[:3]:
-                priority_colors = {
-                    'urgent': '🔴',
-                    'high': '🟡', 
-                    'medium': '🔵',
-                    'low': '⚪'
-                }
-                icon = priority_colors.get(notif['priority'], '🔵')
-                
-                with st.expander(f"{icon} {notif['title']}"):
-                    st.write(notif['message'])
-                    st.caption(f"Created: {notif['created_at']}")
-        else:
-            st.info("No new notifications")
-    
-    # Enhanced chat interface with context awareness
-    st.subheader("💬 Chat with your Financial Assistant")
+    # Enhanced welcome header
+    st.header(f"Welcome, {user_name}! 👋")
     
     # Check if we should prompt for daily expenses
     now = datetime.now()
     if (st.session_state.last_daily_prompt is None or 
         (now - st.session_state.last_daily_prompt).total_seconds() > 8 * 3600):  # Prompt once every 8 hours
-        
-        # Add personalized daily prompt based on user's situation
-        daily_prompts = [
-            "Any spending today? I'm here to help you track your expenses.",
-            "How's your financial day going? Let me know about any purchases!",
-            "Ready to log today's expenses? I can help categorize them automatically!",
-        ]
-        
-        # Customize prompt based on user's profile
-        if not dashboard_data['income_setup_complete']:
-            daily_prompt = "👋 I notice you haven't set up your income yet. Would you like me to help you get started?"
-        elif completion_score < 50:
-            daily_prompt = "Let's continue building your financial profile! What would you like to work on today?"
-        else:
-            daily_prompt = random.choice(daily_prompts)
-        
         # Add the daily prompt to the messages if it's not already there
-        if not st.session_state.messages or daily_prompt not in str(st.session_state.messages[-1]):
+        if not st.session_state.messages or "Any spending today?" not in st.session_state.messages[-1].get("content", ""):
+            # Get a daily prompt from the daily_prompt intent
+            daily_prompt = "Any spending today?"
+            for intent in intents["intents"]:
+                if intent["tag"] == "daily_prompt":
+                    daily_prompt = random.choice(intent["responses"])
+                    break
+            
             with st.chat_message("assistant"):
                 st.markdown(daily_prompt)
             st.session_state.messages.append({"role": "assistant", "content": daily_prompt})
-        
         st.session_state.last_daily_prompt = now
     
-    # Display chat messages from history
+    # Display chat messages from history on app rerun
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
     
-    # Enhanced chat input with suggestions
-    if prompt := st.chat_input("💬 Ask me about your finances or record an expense..."):
-        # Display user message
+    # Chat input
+    if prompt := st.chat_input("Ask me about your finances or record an expense..."):
+        # Display user message in chat message container
         with st.chat_message("user"):
             st.markdown(prompt)
+        
+        # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": prompt})
         
-        # Process with enhanced intelligence
+        # Process the user's message and generate a response
         response = process_user_input(prompt, st.session_state.current_user)
         
-        # Display assistant response
+        # Display assistant response in chat message container
         with st.chat_message("assistant"):
             st.markdown(response)
+        
+        # Add assistant response to chat history
         st.session_state.messages.append({"role": "assistant", "content": response})
 
-elif page == "💰 Income Management":
-    st.title("💰 Income Management")
-    st.markdown("**Manage your income sources for better financial planning**")
-    
-    user_email = st.session_state.current_user
-    
-    # Get current income data
-    income_sources = income_manager.get_user_income_sources(user_email)
-    monthly_income = income_manager.calculate_monthly_income(user_email)
-    
-    # Income overview
-    if income_sources:
-        st.success(f"🎉 **Total Monthly Income: RM{monthly_income['total_monthly']:,.2f}**")
-        
-        # Income breakdown chart
-        if monthly_income['breakdown']:
-            breakdown_data = {k: v for k, v in monthly_income['breakdown'].items() if v > 0}
-            if breakdown_data:
-                st.subheader("📊 Income Breakdown")
-                
-                fig, ax = plt.subplots(figsize=(10, 6))
-                colors = plt.cm.Set3.colors[:len(breakdown_data)]
-                
-                wedges, texts, autotexts = ax.pie(
-                    breakdown_data.values(),
-                    labels=[f"{k.title()}\nRM{v:,.0f}" for k, v in breakdown_data.items()],
-                    autopct='%1.1f%%',
-                    colors=colors,
-                    startangle=90
-                )
-                
-                ax.set_title("Monthly Income by Source", fontsize=14, pad=20)
-                st.pyplot(fig)
-        
-        # Income sources table
-        st.subheader("📋 Your Income Sources")
-        
-        for source in income_sources:
-            with st.expander(f"💼 {source['source_name']} - {source['source_type'].title()}"):
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    st.metric("Amount", f"RM{source['amount']:,.2f}")
-                    st.write(f"**Frequency:** {source['frequency'].title()}")
-                
-                with col2:
-                    monthly_equivalent = income_manager._convert_to_monthly(source['amount'], source['frequency'])
-                    st.metric("Monthly Equivalent", f"RM{monthly_equivalent:,.2f}")
-                    st.write(f"**Tax Rate:** {source['tax_rate']}%")
-                
-                with col3:
-                    st.write(f"**Start Date:** {source['start_date']}")
-                    if source['end_date']:
-                        st.write(f"**End Date:** {source['end_date']}")
-                    st.write(f"**Category:** {source['category'].title()}")
-                
-                if source['description']:
-                    st.write(f"**Description:** {source['description']}")
-                
-                # Quick actions
-                action_col1, action_col2 = st.columns(2)
-                with action_col1:
-                    if st.button(f"✏️ Edit", key=f"edit_{source['id']}"):
-                        st.session_state.editing_income_id = source['id']
-                
-                with action_col2:
-                    if st.button(f"🗑️ Deactivate", key=f"deactivate_{source['id']}"):
-                        # Deactivate income source
-                        pass
-    else:
-        st.warning("🔔 **No income sources found!** Add your income sources to get started with financial planning.")
-    
-    # Add new income source
-    st.subheader("➕ Add New Income Source")
-    
-    with st.form("income_form"):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            source_name = st.text_input("Income Source Name *", placeholder="e.g., Main Job, Freelance, Rental")
-            source_type = st.selectbox("Income Type *", [
-                "salary", "freelance", "investment", "business", "rental", "other"
-            ], format_func=lambda x: x.title())
-            amount = st.number_input("Amount (RM) *", min_value=0.0, format="%.2f")
-            frequency = st.selectbox("Frequency *", [
-                "monthly", "weekly", "bi-weekly", "yearly", "daily", "one-time"
-            ], format_func=lambda x: x.title().replace('-', ' '))
-        
-        with col2:
-            start_date = st.date_input("Start Date *", value=datetime.now().date())
-            end_date = st.date_input("End Date (Optional)", value=None)
-            tax_rate = st.number_input("Tax Rate (%)", min_value=0.0, max_value=100.0, value=0.0, format="%.1f")
-            category = st.selectbox("Category", ["primary", "secondary", "passive"], format_func=lambda x: x.title())
-        
-        description = st.text_area("Description (Optional)", placeholder="Additional details about this income source")
-        
-        is_recurring = st.checkbox("Recurring Income", value=True, help="Uncheck for one-time income")
-        
-        submitted = st.form_submit_button("💰 Add Income Source", use_container_width=True)
-        
-        if submitted:
-            if not source_name or not amount or amount <= 0:
-                st.error("Please fill in all required fields with valid values.")
-            else:
-                source_data = {
-                    'source_name': source_name,
-                    'source_type': source_type,
-                    'amount': amount,
-                    'frequency': frequency,
-                    'start_date': start_date.strftime('%Y-%m-%d'),
-                    'end_date': end_date.strftime('%Y-%m-%d') if end_date else None,
-                    'is_recurring': is_recurring,
-                    'tax_rate': tax_rate,
-                    'description': description,
-                    'category': category
-                }
-                
-                if income_manager.add_income_source(user_email, source_data):
-                    st.success(f"✅ Successfully added income source: {source_name}")
-                    st.rerun()
-                else:
-                    st.error("❌ Failed to add income source. Please try again.")
-    
-    # Income insights and forecasting
-    if income_sources:
-        st.subheader("📈 Income Insights")
-        
-        # Tabs for different insights
-        insight_tab1, insight_tab2, insight_tab3 = st.tabs(["📊 Forecast", "💡 Insights", "📋 Tax Info"])
-        
-        with insight_tab1:
-            st.write("**12-Month Income Forecast**")
-            forecast = income_manager.get_income_forecast(user_email, 12)
-            
-            if forecast['forecast']:
-                # Create forecast chart
-                forecast_df = pd.DataFrame(forecast['forecast'])
-                st.line_chart(forecast_df.set_index('month')['projected_income'])
-                
-                # Forecast summary
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Total Projected (12 months)", f"RM{forecast['total_projected']:,.2f}")
-                with col2:
-                    st.metric("Average Monthly", f"RM{forecast['average_monthly']:,.2f}")
-                with col3:
-                    growth_rate = ((forecast['forecast'][-1]['projected_income'] - forecast['forecast'][0]['projected_income']) / forecast['forecast'][0]['projected_income'] * 100) if forecast['forecast'][0]['projected_income'] > 0 else 0
-                    st.metric("Growth Rate", f"{growth_rate:.1f}%")
-        
-        with insight_tab2:
-            insights = income_manager.get_income_insights(user_email)
-            
-            # Display insights
-            for insight in insights['insights']:
-                if insight['type'] == 'success':
-                    st.success(f"✅ **{insight['title']}**: {insight['message']}")
-                elif insight['type'] == 'warning':
-                    st.warning(f"⚠️ **{insight['title']}**: {insight['message']}")
-                else:
-                    st.info(f"ℹ️ **{insight['title']}**: {insight['message']}")
-                
-                if insight.get('action'):
-                    st.write(f"💡 **Suggestion**: {insight['action']}")
-            
-            # Income stability score
-            st.metric("Income Stability Score", f"{insights['income_stability_score']:.0f}/100")
-            
-            # Recommendations
-            if insights['recommendations']:
-                st.write("**🎯 Personalized Recommendations:**")
-                for i, rec in enumerate(insights['recommendations'], 1):
-                    st.write(f"{i}. {rec}")
-        
-        with insight_tab3:
-            tax_info = income_manager.calculate_tax_estimates(user_email)
-            
-            st.write("**💰 Annual Tax Estimates**")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Gross Income", f"RM{tax_info['yearly']['gross_income']:,.2f}")
-                st.metric("Estimated Tax", f"RM{tax_info['yearly']['estimated_tax']:,.2f}")
-            
-            with col2:
-                st.metric("Net Income", f"RM{tax_info['yearly']['net_income']:,.2f}")
-                st.metric("Effective Tax Rate", f"{tax_info['yearly']['effective_tax_rate']:.1f}%")
-            
-            st.write("**📅 Monthly Estimates**")
-            monthly_col1, monthly_col2, monthly_col3 = st.columns(3)
-            
-            with monthly_col1:
-                st.metric("Monthly Gross", f"RM{tax_info['monthly']['gross_income']:,.2f}")
-            with monthly_col2:
-                st.metric("Monthly Tax", f"RM{tax_info['monthly']['estimated_tax']:,.2f}")
-            with monthly_col3:
-                st.metric("Monthly Net", f"RM{tax_info['monthly']['net_income']:,.2f}")
-
-elif page == "📊 Spending Analysis":
+elif page == "Spending Analysis":
     st.markdown("# Spending Analysis 💰")
     st.sidebar.markdown("# Spending Analysis 💰")
     
