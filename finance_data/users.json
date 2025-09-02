@@ -13,5 +13,10 @@
         "name": "Jane",
         "password": "f3f197f8dddc37d3a4311035c50ace9a35a0e3595153a1a47e72c58ecaccfcd3",
         "joined_date": "2025-08-27 23:30:13"
+    },
+    "test@example.com": {
+        "name": "Test User",
+        "password": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+        "joined_date": "2025-09-02 15:41:11"
     }
 }
