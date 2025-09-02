@@ -65,6 +65,7 @@
                 "expense history",
                 "spending history",
                 "what did i spend",
+                "what did I spent",
                 "show me my expenses",
                 "recent expenses"
             ],
@@ -390,9 +391,9 @@
             "tag": "fallback",
             "patterns": [],
             "responses": [
-                "I'm your personal finance assistant. You can ask me to record expenses, check your budget, provide spending summaries, set financial goals, or offer savings advice. Type 'help' to see all the things I can do!",
-                "I didn't quite catch that. I can help you track expenses, set budgets, create goals, and provide financial insights. Try 'help' to see what I can do.",
-                "Sorry, I'm not sure what you're asking. I'm designed to help with personal finance tasks like expense tracking, budgeting, and goal setting. Type 'help' for more information."
+                "I'm your personal finance assistant. You can ask me to record expenses, check your budget, provide spending summaries, or offer savings advice. Type 'help' to see all the things I can do!",
+                "I didn't quite catch that. I can help you track expenses, set budgets, and provide financial insights. Try 'help' to see what I can do.",
+                "Sorry, I'm not sure what you're asking. I'm designed to help with personal finance tasks like expense tracking and budgeting. Type 'help' for more information."
             ]
         }
     ]
