@@ -15,44 +15,36 @@
                 "how are you"
             ],
             "responses": [
-                "Hello! How can I help with your finances today?",
-                "Hi there! Ready to manage your money?",
-                "Welcome back! What would you like to track today?",
-                "Hello! Let's keep your finances on track. What can I help with?",
-                "Hi! I'm here to help you manage your money. What would you like to do today?"
+                "Hello! How can I help with your finances today?\n\n💡 **Quick Tips:**\n\n• Track expenses: 'I spent RM20 on lunch'\n\n• Set income: 'My income is RM5000'\n\n• Multiple expenses: 'RM15 coffee, RM30 transport'",
+                "Hi there! Ready to manage your money?\n\n🎯 I can help you track spending, set budgets, and create goals!\n\nWhat would you like to do today?",
+                "Welcome back! What would you like to track today?\n\n📊 Try saying something like:\n\n• 'I spent RM25 on food and RM15 on drinks'\n\n• 'Set my income to RM4000'",
+                "Hello! Let's keep your finances on track.\n\nWhat can I help with?\n\n💰 Track expenses | 📊 Set budgets | 🎯 Create goals",
+                "Hi! I'm here to help you manage your money.\n\nWhat would you like to do today?\n\n✨ Just speak naturally - I understand conversational language!"
             ]
         },
         {
-            "tag": "expense_add",
+    "tag": "expense_add",
+    "patterns": [
+        "spent money on", "i spent", "spent", "spend", "i paid", "buy", "bought", "RM", "purchased", 
+        "add expense", "record expense", "log expense", "track spending", "paid for", "cost me", "cost",
+        "for lunch", "for dinner", "for food", "on groceries", "take", "on transport", "on shopping", 
+        "and rm", ", rm", "rm20 for", "rm30 for", "rm50 for", "spend rm", "spent rm", 
+        "multiple expenses", "several purchases", "nasi lemak", "roti canai", "mee goreng"
+    ],
+    "responses": [
+        "I've recorded your expense: RM{amount:.2f} for {description} in the '{category}' category. Is that the right category?",
+        "Added RM{amount:.2f} spent on {description} to your '{category}' expenses. Is that the right category for this expense?",
+        "Got it! RM{amount:.2f} for {description} has been recorded as '{category}'. Is that the correct category?"
+    ]
+},
+        {
+            "tag": "income_set",
             "patterns": [
-                "spent money on",
-                "i spent",
-                "spent",
-                "spend",
-                "i paid",
-                "buy",
-                "bought",
-                "RM",
-                "purchased",
-                "add expense",
-                "record expense",
-                "log expense",
-                "track spending",
-                "paid for",
-                "cost me",
-                "cost",
-                "for lunch",
-                "for dinner",
-                "for food",
-                "on groceries",
-                "take",
-                "on transport",
-                "on shopping"
+                "set income", "my income", "monthly income", "salary", "earn", 
+                "income is", "i earn", "monthly salary", "set my income"
             ],
             "responses": [
-                "I've recorded your expense: RM{amount:.2f} for {description} in the '{category}' category. Is that the right category?",
-                "Added RM{amount:.2f} spent on {description} to your '{category}' expenses. Is that the right category for this expense?",
-                "Got it! RM{amount:.2f} for {description} has been recorded as '{category}'. Is that the correct category?"
+                "💰 **Income Successfully Set!**\n\nYour monthly income has been recorded!\n\nNow you can create goals for cars, houses, or vacations!"
             ]
         },
         {
@@ -67,13 +59,24 @@
                 "what did i spend",
                 "what did I spent",
                 "show me my expenses",
-                "recent expenses"
-            ],
+                "recent expenses",
+                 "show my daily expense",
+                "show daily expense",
+                "daily expense",
+                "today's expense",
+                "show today's expense",
+                "show my monthly expenses",
+                "show monthly expenses",
+                "monthly expenses",
+                "monthly summary",
+                "show month's expenses",
+                "show expenses for this month"
+                ],
             "responses": [
                 "Here are your recent expenses:\n\n{expenses}\n\nWould you like to see expenses for a specific time period or category?"
             ]
         },
-        {
+        {     
             "tag": "budget_set",
             "patterns": [
                 "set budget",
@@ -99,9 +102,11 @@
                 "budget setup"
             ],
             "responses": [
-                "Absolutely! I'd love to help you set up a budget! 💰 Budgeting is one of the smartest financial moves you can make.\n\nWhich area of your spending would you like to create a budget for? You can choose from:\n\n🍽️ **Food** (groceries, dining out, takeaways)\n🚗 **Transport** (gas, public transport, parking)\n🎬 **Entertainment** (movies, games, subscriptions)\n🛍️ **Shopping** (clothes, personal items)\n💡 **Utilities** (electricity, water, internet)\n🏠 **Housing** (rent, mortgage payments)\n⚕️ **Healthcare** (medical, medicine, checkups)\n📚 **Education** (books, courses, training)\n📦 **Other** (miscellaneous expenses)\n\nJust tell me which category interests you most! 😊",
-                "Great thinking! Setting up a budget is such a smart way to take control of your money! 🎯\n\nI'm excited to help you with this. Which spending category would you like to start with? Here are your options:\n\n• Food & Dining\n• Transportation\n• Entertainment & Fun\n• Shopping & Personal Items\n• Utilities & Bills\n• Housing Costs\n• Healthcare\n• Education & Learning\n• Other Expenses\n\nWhich one speaks to you? 😊",
-                "I'm so glad you want to set up a budget! It's going to make such a difference in your financial life! 🌟\n\nLet's start with one category - which area of your spending would you like to get under control first? Just pick whichever feels most important to you right now! 💪"
+                "I'm so excited to help you set up a budget! 🎉 This is going to make such a difference in managing your money!\n\n**Which spending category would you like to start with?** Here are your options:\n\n🍽️ **Food** - groceries, restaurants, takeout\n\n🚗 **Transport** - gas, public transport, parking\n\n🎬 **Entertainment** - movies, games, subscriptions\n\n🛍️ **Shopping** - clothes, personal items\n\n💡 **Utilities** - electricity, water, internet, phone\n\n🏠 **Housing** - rent, mortgage payments\n\n⚕️ **Healthcare** - medical expenses, medicine\n\n📚 **Education** - books, courses, training\n\n📦 **Other** - miscellaneous expenses\n\nJust tell me which category you'd like to focus on first! I'll walk you through everything step by step. 😊",
+        
+                "Great thinking! Setting up a budget is such a smart way to take control of your money! 🎯\n\nI'm excited to help you with this. Which spending category would you like to start with? Here are your options:\n\n• **Food & Dining** 🍽️\n\n• **Transportation** 🚗\n\n• **Entertainment & Fun** 🎬\n\n• **Shopping & Personal Items** 🛍️\n\n• **Utilities & Bills** 💡\n\n• **Housing Costs** 🏠\n\n• **Healthcare** ⚕️\n\n• **Education & Learning** 📚\n\n• **Other Expenses** 📦\n\nWhich one speaks to you? 😊",
+        
+                "I'm so glad you want to set up a budget! It's going to make such a difference in your financial life! 🌟\n\nLet's start with one category - which area of your spending would you like to get under control first?\n\nJust pick whichever feels most important to you right now! 💪"
             ]
         },
         {
@@ -391,9 +396,81 @@
             "tag": "fallback",
             "patterns": [],
             "responses": [
-                "I'm your personal finance assistant. You can ask me to record expenses, check your budget, provide spending summaries, or offer savings advice. Type 'help' to see all the things I can do!",
-                "I didn't quite catch that. I can help you track expenses, set budgets, and provide financial insights. Try 'help' to see what I can do.",
-                "Sorry, I'm not sure what you're asking. I'm designed to help with personal finance tasks like expense tracking and budgeting. Type 'help' for more information."
+                "🤔 I'm not sure I understand that! I'm your personal finance assistant.\n\n💰 **I can help you:**\n• Track expenses: 'RM8 for nasi lemak'\n• Set budgets: 'Set a budget for food'\n• Create goals: 'Save for vacation'\n• View spending: 'Show my expenses'\n\nType **'help'** to see everything I can do! 😊",
+        
+                "😊 Hmm, I didn't quite catch that! Let me know how I can help with your money management.\n\n✨ **Quick examples:**\n• 'I spent RM15 on char kuey teow'\n• 'What's my budget status?'\n• 'Help me save for a car'\n\nWhat would you like to do? 💫",
+        
+                "🎯 I'm here to help with your finances, but I'm not sure what you meant!\n\n🚀 **Try saying:**\n• 'RM12 for roti canai and teh tarik'\n• 'Show my spending summary'\n• 'Set up a budget'\n• 'Help' for all features\n\nHow can I assist you today? 😄"
+            ]
+        },
+        {
+            "tag": "inappropriate_language",
+            "patterns": [
+                "fuck you",
+                "you suck",
+                "stupid bot",
+                "useless",
+                "hate you",
+                "go to hell",
+                "shut up",
+                "piss off"
+            ],
+            "responses": [
+                "😊 I understand you might be having a tough day! I'm here to help make your financial life a bit easier.\n\n💰 **Let's focus on something positive:**\n• Quick expense check\n• Budget review\n• Savings planning\n\nHow can I help you feel more in control of your money? 🌟",
+        
+                "🤝 I hear you! Sometimes finances can be really stressful. But I'm here to support you through it.\n\n✨ **Small steps we can take:**\n• See where your money went today\n• Set a realistic budget\n• Plan for something you want\n\nWhat would help you feel better about your finances? 💪"
+            ]
+        },
+        {
+            "tag": "financial_stress",
+            "patterns": [
+                "broke",
+                "no money",
+                "can't afford",
+                "too expensive",
+                "financial stress",
+                "money problems",
+                "struggling financially",
+                "tight budget",
+                "end of month"
+            ],
+            "responses": [
+                "💙 I understand - financial stress is real and you're not alone in feeling this way.\n\n🌟 **Let's take small positive steps:**\n• See exactly where your money goes\n• Find areas to optimize\n• Set achievable goals\n• Build emergency savings gradually\n\nYou're taking the right step by tracking your finances. What would you like to start with? 🤗",
+        
+                "🤗 Financial challenges are tough, but you're being smart by managing your money actively!\n\n💪 **We can work together to:**\n• Identify spending patterns\n• Create a realistic budget\n• Find ways to save small amounts\n• Plan for better financial health\n\nEvery small step counts. What feels manageable right now? ✨"
+            ]
+        },
+        {
+            "tag": "expense_view_daily",
+            "patterns": [
+                "show my expenses",
+                "show expenses", 
+                "my expenses",
+                "view expenses",
+                "see my expenses",
+                "daily expenses",
+                "today expenses",
+                "what did i spend",
+                "spending today"
+            ],
+            "responses": [
+                "Let me show you today's expenses! 📅"
+            ]
+        },
+        {
+            "tag": "expense_view_monthly", 
+            "patterns": [
+                "show monthly expenses",
+                "monthly expenses",
+                "show month",
+                "view monthly", 
+                "monthly summary",
+                "this month expenses",
+                "month spending",
+                "monthly breakdown"
+            ],
+            "responses": [
+                "Here's your monthly expense summary! 📊"
             ]
         }
     ]
