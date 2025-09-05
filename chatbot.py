@@ -673,7 +673,7 @@ def categorize_expense_enhanced(description):
         "entertainment": [
             "movie", "cinema", "film", "game", "gaming", "concert", "show", "entertainment", 
             "netflix", "spotify", "youtube", "ktv", "karaoke", "astro", "streaming",
-            "book", "magazine", "music", "sports", "gym", "fitness"
+            "magazine", "music", "sports", "gym", "fitness"
         ],
         
         "shopping": [
@@ -3442,12 +3442,71 @@ def process_user_input(input_text, user_email):
         st.session_state.budget_conversation = {"stage": "ask_category"}
         return "I'm so excited to help you set up a budget! 🎉 This is going to make such a difference in managing your money!\n\n**Which spending category would you like to start with?** Here are your options:\n\n🍽️ **Food** - groceries, restaurants, takeout\n\n🚗 **Transport** - gas, public transport, parking\n\n🎬 **Entertainment** - movies, games, subscriptions\n\n🛍️ **Shopping** - clothes, personal items\n\n💡 **Utilities** - electricity, water, internet, phone\n\n🏠 **Housing** - rent, mortgage payments\n\n⚕️ **Healthcare** - medical expenses, medicine\n\n📚 **Education** - books, courses, training\n\n📦 **Other** - miscellaneous expenses\n\nJust tell me which category you'd like to focus on first! I'll walk you through everything step by step. 😊"
 
-    # Handle expense viewing requests
+# Handle expense viewing requests with enhanced flexibility
+    from expenses_view import detect_expense_view_type, show_specific_day_expenses, show_specific_week_expenses, show_specific_month_expenses
+    
+    # Check for ambiguous day references (just day name without this/last qualifier)
+    day_names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    input_lower = input_text.lower()
+    
+    # Check if input contains a day name but not "this" or "last" qualifier
+    contains_day = any(day in input_lower for day in day_names)
+    contains_qualifier = "this " in input_lower or "last " in input_lower or "previous " in input_lower
+    
+    if contains_day and not contains_qualifier and "expenses" in input_lower:
+        # Ambiguous day reference, ask for clarification
+        for day in day_names:
+            if day in input_lower:
+                day_name = day.title()
+                if len(day) <= 3:  # Convert short forms to full names
+                    if day == "mon": day_name = "Monday"
+                    elif day == "tue": day_name = "Tuesday"
+                    elif day == "wed": day_name = "Wednesday"
+                    elif day == "thu": day_name = "Thursday"
+                    elif day == "fri": day_name = "Friday"
+                    elif day == "sat": day_name = "Saturday"
+                    elif day == "sun": day_name = "Sunday"
+                
+                response = f"📅 **I need a bit more information about which {day_name} you mean.**\n\n"
+                response += f"Did you mean **'this {day_name}'** (the upcoming {day_name}) or **'last {day_name}'** (the most recent past {day_name})?🤔\n\n"
+                response += "**Please specify by typing:**\n\n"
+                response += f"• 'Show this {day_name.lower()} expenses'\n\n"
+                response += f"• 'Show last {day_name.lower()} expenses'\n\n"
+                response += "Or you can try these other options:\n"
+                response += "\n**👆 Viewing Options:**\n\n"
+                response += "\n• 'Show **[month name e.g. aug, september]** expenses' - View specific month\n\n"
+                response += "• 'Show **[week e.g. this week, last week]** expenses' - View weekly expenses\n\n"
+                response += "• 'Show **[day e.g. today, yesterday, mon-sun]** expenses' - View specific day spending\n\n"
+                response += "  Note: Please use 'this' or 'last' with days of week (mon-sun) for clarity\n"
+                return response
+    
+    # First check for expense viewing requests
+    expense_view_type = detect_expense_view_type(input_text)
+    if expense_view_type:
+        if expense_view_type == "day":
+            return show_specific_day_expenses(user_email, input_text, DB_PATH)
+        elif expense_view_type == "week":
+            return show_specific_week_expenses(user_email, input_text, DB_PATH)
+        elif expense_view_type == "month":
+            return show_specific_month_expenses(user_email, input_text, DB_PATH)
+        elif expense_view_type == "specific_date":
+            # Handle requests with specific date formats like "5/9"
+            response = "❌ **Unable to display expenses for specific dates in this format.**\n\n"
+            response += "I don't support specific date formats like '5/9' or '05-09'.\n\n"
+            response += "Instead, try one of these options:\n"
+            response += "**👆 Viewing Options:**\n"
+            response += "\n• 'Show **[month name e.g. aug, september]** expenses' - View specific month\n\n"
+            response += "• 'Show **[week e.g. this week, last week]** expenses' - View weekly expenses\n\n"
+            response += "• 'Show **[day e.g. today, yesterday, mon-sun]** expenses' - View specific day spending\n\n"
+            response += "  Note: Please use 'this' or 'last' with days of week (mon-sun) for clarity\n"
+            return response
+    
+    # Legacy expense viewing options (for backward compatibility)
     if input_text.lower() in ["show my daily expense", "show daily expense", "daily expense", "today's expense", "show today's expense"]:
-        return show_daily_expenses(user_email)
+        return show_specific_day_expenses(user_email, "today", DB_PATH)
 
     if input_text.lower() in ["show my monthly expenses", "show monthly expenses", "monthly expenses", "monthly summary", "show month's expenses", "show expenses for this month"]:
-        return show_monthly_expenses(user_email)
+        return show_specific_month_expenses(user_email, "this month", DB_PATH)
 
     # Handle income setting
     if any(word in input_text.lower() for word in ["income", "salary", "earn", "monthly income"]):
@@ -3672,7 +3731,7 @@ def process_user_input(input_text, user_email):
     
     # Handle general intents
     if intent_tag == "expense_query":
-        return show_daily_expenses(user_email)
+        return show_specific_day_expenses(user_email, "today", DB_PATH)
     
     elif intent_tag == "budget_query":
         return show_budget_status(user_email)
@@ -3751,209 +3810,6 @@ def get_user_expenses(user_email):
     except Exception as e:
         print(f"DEBUG: Error getting expenses: {e}")
         return []
-        
-def show_daily_expenses(user_email):
-    """
-    Show today's expenses with better formatting and weekly summary
-    """
-    from datetime import datetime, timedelta
-    
-    today = datetime.now().strftime("%A, %B %d, %Y")
-    today_short = datetime.now().strftime("%Y-%m-%d")  # 2025-09-03
-    
-    print(f"DEBUG: Today's date for filtering: {today_short}")
-    print(f"DEBUG: User email: {user_email}")
-    
-    # Get today's expenses using the correct database connection
-    try:
-        conn = sqlite3.connect(DB_PATH)  # Use DB_PATH instead of hardcoded path
-        c = conn.cursor()
-        
-        # Get today's expenses - FIXED QUERY
-        c.execute("""
-            SELECT amount, description, category, date
-            FROM expenses 
-            WHERE user_email = ? AND date = ?
-            ORDER BY id DESC
-        """, (user_email, today_short))
-        
-        today_expenses = c.fetchall()
-        
-        # Get this week's expenses for weekly summary
-        week_start = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
-        c.execute("""
-            SELECT amount, description, category, date
-            FROM expenses 
-            WHERE user_email = ? AND date >= ?
-            ORDER BY date DESC, id DESC
-        """, (user_email, week_start))
-        
-        week_expenses = c.fetchall()
-        conn.close()
-        
-        print(f"DEBUG: Found {len(today_expenses)} expenses for today")
-        print(f"DEBUG: Found {len(week_expenses)} expenses for this week")
-        
-    except Exception as e:
-        print(f"DEBUG: Database error: {e}")
-        return f"❌ **Error retrieving expenses:** {str(e)}\n\nPlease try again!"
-    
-    # Build response with proper formatting
-    response = f"📅 **{today}**\n\n"
-    
-    if not today_expenses:
-        response += "No expenses recorded for today yet! 💸\n\n"
-        response += "✨ **Ready to start tracking?**\n"
-        response += "• 'I spent RM8 on nasi lemak'\n"
-        response += "• 'RM15 for roti canai'\n" 
-        response += "• 'RM25 groceries at Aeon'\n\n"
-        response += "What did you spend money on today? 😊\n\n"
-    else:
-        # Calculate today's total
-        total_today = sum(float(exp[0]) for exp in today_expenses)
-        response += f"**Daily Total: RM{total_today:.2f}**\n\n"
-        
-        # Group by category for better display
-        category_totals = {}
-        
-        for expense in today_expenses:
-            amount = float(expense[0])
-            description = expense[1]
-            category = expense[2]
-            
-            # Add to category totals
-            if category not in category_totals:
-                category_totals[category] = 0
-            category_totals[category] += amount
-            
-            # Format individual expense with proper line breaks
-            response += f"• RM{amount:.2f} for **{description}** ({category.title()})\n"
-        
-        response += "\n"
-        
-        # Add category summary if multiple categories
-        if len(category_totals) > 1:
-            response += "💰 **Category Breakdown:**\n"
-            for category, total in category_totals.items():
-                response += f"• {category.title()}: RM{total:.2f}\n"
-            response += "\n"
-    
-    # Add weekly summary if there are weekly expenses
-    if week_expenses:
-        response += "📊 **This Week's Summary:**\n"
-        
-        # Group weekly expenses by date
-        weekly_by_date = {}
-        weekly_total = 0
-        
-        for expense in week_expenses:
-            date = expense[3]
-            amount = float(expense[0])
-            weekly_total += amount
-            
-            if date not in weekly_by_date:
-                weekly_by_date[date] = 0
-            weekly_by_date[date] += amount
-        
-        # Show last 7 days
-        response += f"**Weekly Total: RM{weekly_total:.2f}**\n\n"
-        
-        # Sort dates and show recent days
-        sorted_dates = sorted(weekly_by_date.items(), reverse=True)[:7]
-        for date, daily_total in sorted_dates:
-            try:
-                date_obj = datetime.strptime(date, "%Y-%m-%d")
-                formatted_date = date_obj.strftime("%a, %b %d")
-                response += f"• {formatted_date}: RM{daily_total:.2f}\n"
-            except:
-                response += f"• {date}: RM{daily_total:.2f}\n"
-        
-        response += "\n"
-    
-    # Add monthly prompt at the end
-    response += "📈 **Want to see your monthly expenses?** Just say 'show monthly expenses'! 📊"
-    
-    return response
-
-def show_monthly_expenses(user_email):
-    """
-    Show this month's expenses with better formatting
-    """
-    from datetime import datetime
-    
-    # Get current month info
-    now = datetime.now()
-    month_name = now.strftime("%B %Y")
-    month_start = now.replace(day=1).strftime("%Y-%m-%d")
-    
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-        
-        # Get this month's expenses
-        c.execute("""
-            SELECT amount, description, category, date
-            FROM expenses 
-            WHERE user_email = ? AND date >= ?
-            ORDER BY date DESC, id DESC
-        """, (user_email, month_start))
-        
-        monthly_expenses = c.fetchall()
-        conn.close()
-        
-    except Exception as e:
-        return f"❌ **Error retrieving monthly expenses:** {str(e)}"
-    
-    response = f"📅 **{month_name}**\n\n"
-    
-    if not monthly_expenses:
-        response += "No expenses recorded this month yet! 💸\n\n"
-        response += "Start tracking your daily expenses to see your monthly summary! 😊"
-        return response
-    
-    # Calculate monthly total
-    monthly_total = sum(float(exp[0]) for exp in monthly_expenses)
-    response += f"**Monthly Total: RM{monthly_total:.2f}**\n\n"
-    
-    # Group by category
-    category_totals = {}
-    daily_totals = {}
-    
-    for expense in monthly_expenses:
-        amount = float(expense[0])
-        category = expense[2]
-        date = expense[3]
-        
-        # Category totals
-        if category not in category_totals:
-            category_totals[category] = 0
-        category_totals[category] += amount
-        
-        # Daily totals
-        if date not in daily_totals:
-            daily_totals[date] = 0
-        daily_totals[date] += amount
-    
-    # Show category breakdown
-    response += "💰 **Category Breakdown:**\n"
-    for category, total in sorted(category_totals.items(), key=lambda x: x[1], reverse=True):
-        percentage = (total / monthly_total) * 100
-        response += f"• {category.title()}: RM{total:.2f} ({percentage:.1f}%)\n"
-    
-    response += "\n"
-    
-    # Show recent daily totals (last 10 days)
-    response += "📊 **Recent Daily Spending:**\n"
-    recent_days = sorted(daily_totals.items(), reverse=True)[:10]
-    for date, total in recent_days:
-        try:
-            date_obj = datetime.strptime(date, "%Y-%m-%d")
-            formatted_date = date_obj.strftime("%a, %b %d")
-            response += f"• {formatted_date}: RM{total:.2f}\n"
-        except:
-            response += f"• {date}: RM{total:.2f}\n"
-    
-    return response
 
 # -------------------------------- UI Layout --------------------------------
 # Add a header
