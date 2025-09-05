@@ -273,6 +273,36 @@ def get_user_income(user_email):
         return result[0] if result else 0
     except Exception as e:
         return 0
+    
+def get_income_response(user_email):
+    """Handle income viewing with proper messaging for both set and unset cases"""
+    income = get_user_income(user_email)
+    
+    if income > 0:
+        # User has income set - show it with options
+        response = f"💰 **Your Monthly Income: RM{income:.2f}**\n\n"
+        response += "🎯 **What would you like to do?**\n\n"
+        response += "• View your income breakdown\n"
+        response += "• Update your income amount\n"
+        response += "• Set financial goals (now that income is set!)\n"
+        response += "• Get savings recommendations\n\n"
+        response += "💡 **Just say:** 'update income' or 'set a goal' to continue!"
+        return response
+    else:
+        # User hasn't set income - prompt to set it
+        response = "📊 **No Income Setting Found**\n\n"
+        response += "You haven't set your monthly income yet. This is important because:\n\n"
+        response += "🎯 **I need your income to:**\n"
+        response += "• Help you set realistic budgets\n"
+        response += "• Create achievable financial goals\n"
+        response += "• Provide personalized savings advice\n"
+        response += "• Analyze your spending patterns properly\n\n"
+        response += "💰 **Please set your income first:**\n\n"
+        response += "• 'My income is RM5000'\n"
+        response += "• 'Set income RM4000' \n"
+        response += "• 'I earn RM3000 per month'\n\n"
+        response += "Once you set your income, we can start planning your financial future! 💪"
+        return response
 
 def has_income_set(user_email):
     """Check if user has set their income"""
@@ -1156,6 +1186,8 @@ def get_user_goals(user_email):
     goals = c.fetchall()
     conn.close()
     
+    print(f"DEBUG: Raw goals from DB for {user_email}: {goals}") 
+
     goal_list = []
     for goal in goals:
         # Handle both old goals (without goal_details) and new goals (with goal_details)
@@ -1573,10 +1605,6 @@ def get_goal_progress(goal):
 def show_goals_status(user_email):
     """
     Show user's goals status, one by one, with advanced breakdowns.
-    Only shows the three main goals:
-      - Buy New Car
-      - Buy New House
-      - Go To Travel
     """
     # Get user's goals
     all_goals = get_user_goals(user_email)
@@ -1586,53 +1614,37 @@ def show_goals_status(user_email):
         print(f"{i+1}. goal_type: {repr(goal.get('goal_type'))}, goal_name: {repr(goal.get('goal_name'))}")
         print("   FULL GOAL DICT:", goal)
 
-    # Only keep the three main goals (case-insensitive match)
-    main_goal_types = [
-    "buy new car", "buy car", "car",
-    "buy new house", "buy house", "house",
-    "go to travel", "travel", "vacation", "trip"
-    ]
-    goals = [
-    goal for goal in all_goals
-    if any(main_type in goal["goal_type"].lower() for main_type in main_goal_types)
-    or any(main_type in goal["goal_name"].lower() for main_type in main_goal_types)
-    ]
-
     # If none, prompt to set one
-    if not goals:
+    if not all_goals:
         return (
-            "🚗🏠✈️ **No major goals found!**\n\n"
-            "You haven't set any of the main goals yet: Buy New Car, Buy New House, Go To Travel.\n\n"
-            "Ready to plan your dreams? Just say 'set a goal for car', 'set a goal for house', or 'set a goal for travel'!"
+            "🚗🏠✈️ **No goals found!**\n\n"
+            "You haven't set any financial goals yet.\n\n"
+            "Ready to plan your dreams? Just say 'set a goal'!"
         )
 
-    # Sort by goal_type (car, house, travel)
-    def goal_sorter(goal):
-        # Put car, house, travel in this order
-        for i, typ in enumerate(main_goal_types):
-            if goal["goal_type"].lower() == typ or typ in goal["goal_name"].lower():
-                return i
-        return 99
-    goals = sorted(goals, key=goal_sorter)
-
-    # Build response: status for each goal, one by one
-    response = "🎯 **Your Main Goals Status**\n\n"
-    emoji_map = {
-        "buy new car": "🚗",
-        "buy new house": "🏠",
-        "go to travel": "✈️"
-    }
-    for goal in goals:
+    # Build response: status for each goal
+    response = "🎯 **Your Financial Goals Status**\n\n"
+    
+    for goal in all_goals:
         # Progress details
         progress = get_enhanced_goal_progress(goal)
-        emoji = None
-        # Use emoji from map, fallback to 🎯
-        for typ, em in emoji_map.items():
-            if typ in goal["goal_type"].lower() or typ in goal["goal_name"].lower():
-                emoji = em
-                break
-        if not emoji:
-            emoji = "🎯"
+        
+        # Use appropriate emoji based on goal type
+        goal_type_lower = goal.get('goal_type', '').lower()
+        goal_name_lower = goal.get('goal_name', '').lower()
+        
+        emoji = "🎯"  # Default emoji
+        
+        if any(word in goal_type_lower or word in goal_name_lower for word in ["car", "vehicle", "auto"]):
+            emoji = "🚗"
+        elif any(word in goal_type_lower or word in goal_name_lower for word in ["house", "home", "property"]):
+            emoji = "🏠"
+        elif any(word in goal_type_lower or word in goal_name_lower for word in ["travel", "vacation", "trip", "holiday"]):
+            emoji = "✈️"
+        elif any(word in goal_type_lower or word in goal_name_lower for word in ["emergency", "fund"]):
+            emoji = "💰"
+        elif any(word in goal_type_lower or word in goal_name_lower for word in ["education", "school", "study"]):
+            emoji = "🎓"
 
         response += f"{emoji} **{goal['goal_name']}**\n"
         response += f"├ Target: RM{goal['target_amount']:.2f}\n"
@@ -1653,7 +1665,7 @@ def show_goals_status(user_email):
 
         response += "\n"
 
-    response += "✨ Want to add money to a goal? Just say 'add RMxxx to my car/house/travel goal'.\n"
+    response += "✨ Want to add money to a goal? Just say 'add RMxxx to my [goal name]'.\n"
     response += "🏆 Need help or want to set a new goal? Say 'set a goal'."
 
     return response
@@ -2997,13 +3009,284 @@ def process_user_input(input_text, user_email):
     """
     Process user input with clear priority handling and organized sections.
     """
-    
-    # ==================== SETUP AND CLEANING ====================
+
     input_text = input_text.strip()
     input_lower = input_text.lower()
 
-        # === GOAL CONVERSATION HANDLING: TOP PRIORITY ===
+    # --- INTERRUPT GOAL CREATION IF USER TYPES OTHER COMMANDS ---
+    if st.session_state.get("goal_creation_stage"):
+    # Lowercase and strip for easier matching
+        input_lower = input_text.lower().strip()
+
+    # These are "escape" triggers: expense, budget, help, show, etc.
+        escape_triggers = [
+            "spent", "spend", "rm", "paid", "buy", "bought", "add expense", "record expense", "log expense",
+            "budget", "set budget", "show budget", "check budget", "view budget",
+            "goal", "show goals", "check goals", "view goals",
+            "show", "view", "check", "help", "logout", "exit",
+            "track", "summary", "analysis", "about",
+        # Add more as needed
+        ]
+    # If user input starts with or contains any trigger, cancel goal flow and process as normal
+        if any(trigger in input_lower for trigger in escape_triggers):
+            st.session_state.goal_creation_stage = None
+        # Optionally clear other related temp variables
+            st.session_state.pop("new_goal_name", None)
+            st.session_state.pop("new_goal_time", None)
+            st.session_state.pop("new_goal_amount", None)
+        # Now process the input as if it was outside the goal flow
+            return process_user_input(input_text, user_email)
+
+    if input_lower in ["set a goal", "create goal", "new goal", "add goal"]:
+            st.session_state.goal_creation_stage = "get_goal_name"
+            return (
+            "🎯 Let's create your financial goal!\n\n"
+            "Can you provide your goal name and timeline?\n"
+            "_(e.g., 'Buy a car in 1 year', 'Family vacation in 2 years', 'Wedding in 18 months')_"
+            )
+    
+        # 2. Handle goal listing commands (EXACT match only!)
+    if input_lower in [
+        "show my goals", "view my goals", "check my goals", "goal progress", 
+        "goals status", "goal summary", "see goals", "goal overview", "all goals"
+    ]:
+        goals = get_user_goals(user_email)
+        if not goals:
+            return (
+                "🎯 **You don't have any goals yet!**\n\n"
+                "Setting financial goals is one of the biggest predictors of success.\n\n"
+                "Would you like to set a goal? Just say **'set a goal'** to get started.\n\n"
+                "Popular ideas:\n- Save for a vacation 🌴\n- Emergency fund 💰\n- Buy a car 🚗\n- Buy a house 🏠\n- Education 🎓\n"
+            )
+        else:
+            return show_goals_status(user_email)
+
+    add_to_goal_pattern = re.search(r"add\s*rm?\s*(\d+(?:\.\d+)?)\s*(to)?\s*(my)?\s*(.+?)\s*goal", input_lower)
+    if add_to_goal_pattern:
+        amount = float(add_to_goal_pattern.group(1))
+        goal_name = add_to_goal_pattern.group(4).strip()
+        goal = find_goal_by_name(user_email, goal_name)
+        if goal:
+            success = add_goal_contribution(goal['id'], user_email, amount, "Chatbot quick add")
+            if success:
+                return f"✅ Added RM{amount:.2f} to your '{goal['goal_name']}' goal! Keep going!"
+            else:
+                return "❌ Failed to add contribution. Please try again."
+        else:
+            return f"Couldn't find goal named '{goal_name}'. Check your goal name and try again."
+
+    # --- ADVANCED GOALS LOGIC BLOCK ---
+# In the process_user_input function, find the goal query patterns section and replace it with:
+
+# --- ADVANCED GOALS LOGIC BLOCK ---
+    goal_query_patterns = [
+        "goal", "goals", "show goal", "show goals", "my goal", "my goals",
+        "view goal", "view goals", "check goal", "check goals", "goal progress", 
+        "goals progress", "goal status", "goals status", "goal summary", "goals summary",
+        "see goal", "see goals", "goal overview", "goals overview",
+        "all goal", "all goals", "check goal progress", "check goals progress",
+        "how's my saving", "savings progress"
+    ]
+
+    if any(input_lower.startswith(pat) or input_lower == pat for pat in goal_query_patterns):
+        goals = get_user_goals(user_email)
+        print("DEBUG: goals returned for user:", goals)  # Add this for debugging
+    
+        if not goals:
+            return (
+                "🎯 **You don't have any goals yet!**\n\n"
+                "Setting financial goals is one of the biggest predictors of success.\n\n"
+                "Would you like to set a goal? Just say **'set a goal'** to get started.\n\n"
+                "Popular ideas:\n- Save for a vacation 🌴\n- Emergency fund 💰\n- Buy a car 🚗\n- Buy a house 🏠\n- Education 🎓\n"
+            )
+        else:
+        # User has goals - show them properly
+            resp = "🎯 **Your Financial Goals & Progress:**\n\n"
+            for goal in goals:
+                progress = get_enhanced_goal_progress(goal)
+                resp += (
+                    f"**{goal['goal_name']}**\n"
+                    f"├ Target: RM{goal['target_amount']:.2f}\n"
+                    f"├ Saved: RM{goal['current_amount']:.2f} ({progress['progress_percent']:.1f}%)\n"
+                    f"├ Remaining: RM{progress['remaining_amount']:.2f}\n"
+                    f"├ Status: {progress['status']}\n"
+                    f"├ Days left: {progress['days_remaining']}\n"
+                    f"├ Monthly needed: RM{progress['weekly_target']*4:.2f} (weekly: RM{progress['weekly_target']:.2f})\n"
+                    f"└ {progress['status_msg']}\n\n"
+                )
+            resp += "✨ Want to add money to a goal? Just say 'add RMxxx to my [goal name]'.\n"
+            resp += "🏆 Want to set a new goal? Say 'set a goal'."
+            return resp
+
+    # Goal creation flow (already in your code, just ensure it’s only triggered by set/create/add goal, not show)
+    goal_commands = ["set a goal", "set goals", "set goal", "create goal", "new goal", "add goal", "make a goal"]
+    if input_lower in goal_commands:
+        st.session_state.goal_creation_stage = "get_goal_name"
+        return (
+            "🎯 Let's create your financial goal!\n\n"
+            "Can you provide your goal name and timeline?\n"
+            "_(e.g., 'Buy a car in 1 year', 'Family vacation in 2 years', 'Wedding in 18 months')_"
+        )
+
+    # --- GOAL CREATION MULTI-STEP FLOW (Free-form goal name) ---
+
+# 1. Start new goal flow
+    if input_lower in ["set a goal", "create goal", "new goal"] or st.session_state.get("goal_creation_stage") == "start":
+        st.session_state.goal_creation_stage = "get_goal_name"
+        return "🎯 Let's create your financial goal!\n\nCan you provide your goal name and timeline? (e.g., 'Buy a car in 1 year', 'Save for house in 2 years')"
+
+    if st.session_state.get("goal_creation_stage") == "get_goal_name":
+    # Try to extract timeline (years or months)
+        match = re.search(r"(.*?)(?: in | after | for )(\d+ ?(year|month|week)s?)", input_text, re.IGNORECASE)
+        if match:
+            goal_name = match.group(1).strip().title()
+        # --- DUPLICATE CHECK ---
+            user_goals = get_user_goals(user_email)
+            for goal in user_goals:
+            # Use fuzzy match so 'Car', 'Buy a car', 'My Car Goal' all match
+                if goal_name.lower() in goal['goal_name'].lower() or goal['goal_name'].lower() in goal_name.lower():
+                    st.session_state.goal_creation_stage = None
+                    return (
+                        f"⚠️ You already have a goal for '**{goal['goal_name']}**'.\n"
+                        "Would you like to:\n"
+                        "1. Edit this goal (say 'edit car goal')\n"
+                        "2. Add a contribution (say 'add RMxxx to car goal')\n"
+                        "3. Create a different goal (provide a new name)\n"
+                    )
+        # If no duplicate, continue as normal:
+            goal_time = match.group(2).strip()
+            st.session_state.new_goal_name = goal_name
+            st.session_state.new_goal_time = goal_time
+            st.session_state.goal_creation_stage = "confirm_name_time"
+            return (
+                f"Wohoo! So your goal name is **{goal_name}** and the timeline is **{goal_time}**.\n"
+            "Type 'yes' to confirm, or enter a new goal name and timeline to change."
+            )
+        else:
+        # Fallback for gibberish/profanity/unknown input
+            fallback_message = (
+                "🫤 I'm not sure I understand that! I'm your personal finance assistant.\n\n"
+                "💰 **I can help you:** • Track expenses: 'RM8 for nasi lemak' • Set budgets: 'Set a budget for food' • "
+                "Create goals: 'Save for vacation' • View spending: 'Show my expenses'\n\n"
+                "Type '**help**' to see everything I can do! 😊\n\n"
+                "_Or, to create a goal, provide a name and timeline (e.g., 'Buy car in 1 year')._"
+            )
+        # Optional: basic profanity filter
+            profanity_words = ["fuck", "shit", "damn", "bitch", "pukimak", "lancau", "cibai"]
+            if any(word in input_text.lower() for word in profanity_words):
+                return fallback_message
+            return fallback_message
+    
+
+    # 3. Confirm name and timeline
+    if st.session_state.get("goal_creation_stage") == "confirm_name_time":
+        if input_lower in ["yes", "y", "confirm", "ok"]:
+            st.session_state.goal_creation_stage = "get_goal_amount"
+            income = get_user_income(user_email)
+            return (f"Your monthly income is **RM{income:.2f}**.\nHow much do you want to save for this goal? (e.g., RM8000)")
+        else:
+            st.session_state.goal_creation_stage = "get_goal_name"
+            return "No worries! Please provide your goal name and timeline again (e.g., 'Buy car in 1 year')."
+
+    # 4. Get amount
+    if st.session_state.get("goal_creation_stage") == "get_goal_amount":
+        amount_match = re.search(r"(\d+(?:\.\d+)?)", input_text)
+        if amount_match:
+            amount = float(amount_match.group(1))
+            st.session_state.new_goal_amount = amount
+            st.session_state.goal_creation_stage = "final_confirm"
+            goal_name = st.session_state.new_goal_name
+            goal_time = st.session_state.new_goal_time
+            return (f"Great! You want to save **RM{amount:.2f}** for your goal.\nNow, let's confirm your goal:\n"
+                f"- Name: {goal_name}\n- Timeline: {goal_time}\n- Target amount: RM{amount:.2f}\n"
+                "Type 'yes' to create this goal, or 'no' to start over.")
+        else:
+            return "Please enter the target amount (e.g., RM8000 or 8000)."
+
+    # 5. Final confirmation
+    if st.session_state.get("goal_creation_stage") == "final_confirm":
+        if input_lower in ["yes", "y", "confirm", "ok"]:
+            # Save goal to DB here!
+            goal_name = st.session_state.new_goal_name
+            goal_time = st.session_state.new_goal_time
+            amount = st.session_state.new_goal_amount
+            # Calculate months from timeline (simple logic)
+            months = 12  # Default
+            m = re.search(r"(\d+)\s*year", goal_time)
+            if m:
+                months = int(m.group(1)) * 12
+            else:
+                m = re.search(r"(\d+)\s*month", goal_time)
+                if m:
+                    months = int(m.group(1))
+            monthly_needed = amount / months
+        # You would call add_goal(user_email, goal_name, "custom", amount, target_date, monthly_needed) here
+        # Clear session state
+            st.session_state.goal_creation_stage = None
+            st.session_state.new_goal_name = None
+            st.session_state.new_goal_time = None
+            st.session_state.new_goal_amount = None
+            return (f"🎉 Your goal **'{goal_name}'** for **RM{amount:.2f}** in {goal_time} has been created!\n"
+                f"You need to save **RM{monthly_needed:.2f}/month** to reach your goal.")
+        else:
+            st.session_state.goal_creation_stage = "get_goal_name"
+            return "No worries! Let's start over. Please provide your goal name and timeline (e.g., 'Buy car in 1 year')."
+
+    # --- Handle confirm income step ---
+    if st.session_state.get('pending_income_amount') is not None:
+        input_clean = input_text.strip().lower()
+        # User confirms
+        if input_clean in ['yes', 'y', 'confirm', 'ok']:
+            new_income = st.session_state.pending_income_amount
+            success = set_user_income(user_email, new_income)
+            st.session_state.pending_income_amount = None
+            if success:
+                return f"✅ Your monthly income has been updated to RM{new_income:.2f}."
+            else:
+                return "❌ Sorry, there was an error setting your income. Please try again."
+        # User enters a new amount (change)
+        amount_match = re.search(r"(\d+(?:\.\d+)?)", input_text)
+        if amount_match:
+            new_income = float(amount_match.group(1))
+            st.session_state.pending_income_amount = new_income
+            return (f"📝 You entered RM{new_income:.2f} as your new monthly income.\n\n"
+                    "Do you want to confirm this amount, or change it again? (Reply 'yes' to confirm, or enter a new amount.)")
+        # Otherwise, prompt again
+        return ("Please reply 'yes' to confirm your new income, or enter a different amount to change it.")
+
+    # --- Handle pending income update (first enter new value) ---
+    if st.session_state.get('pending_income_update'):
+        amount_match = re.search(r"(\d+(?:\.\d+)?)", input_text)
+        if amount_match:
+            new_income = float(amount_match.group(1))
+            st.session_state.pending_income_update = False
+            st.session_state.pending_income_amount = new_income  # <--- Store for confirm step
+            return (f"📝 You entered RM{new_income:.2f} as your new monthly income.\n\n"
+                    "Do you want to confirm this amount, or change it again? (Reply 'yes' to confirm, or enter a new amount.)")
+        else:
+            return "❌ I couldn't understand that amount. Please enter your new monthly income as a number, e.g. '6000' or 'RM6500'."
+
+    # === GOAL CONVERSATION HANDLING: TOP PRIORITY ===
+# ==================== PRIORITY 1: GOAL CONVERSATION HANDLING: TOP PRIORITY ====================
     if "goal_conversation" in st.session_state and st.session_state.goal_conversation:
+    # ✅ COMPULSORY: MUST HAVE INCOME BEFORE ANY GOAL SETUP
+        if not has_income_set(user_email):
+        # Clear any goal conversation and force income setting
+            del st.session_state.goal_conversation
+            return (
+                "🚫 **INCOME REQUIRED BEFORE GOAL SETUP**\n\n"
+                "💰 **You must set your monthly income before creating any goals!**\n\n"
+                "This is compulsory because:\n"
+                "• I need to analyze if your goals are realistic\n"
+                "• I can calculate how much you need to save monthly\n"
+                "• I can give you smart financial advice\n\n"
+                "👉 **Please set your income first:**\n"
+                "• 'My income is RM5000'\n"
+                "• 'Set income RM4000'\n"
+                "• 'I earn RM3000 per month'\n\n"
+                "After setting income, you can create goals immediately! 💪"
+            )
+    
         goal_conv = st.session_state.goal_conversation
 
         if goal_conv.get("stage") == "ask_amount":
@@ -3013,7 +3296,7 @@ def process_user_input(input_text, user_email):
                 goal_conv["goal_amount"] = goal_amount
                 goal_conv["stage"] = "ask_timeframe"
                 return (
-                    f"Great! You've set RM{goal_amount:.2f} for your goal.\n"
+                        f"Great! You've set RM{goal_amount:.2f} for your goal.\n"
                     f"Now, what's your savings timeframe? (minimum 6 months, e.g., 12 months, 2 years)\n"
                     f"This helps me plan the monthly savings amount for you!"
                 )
@@ -3049,9 +3332,20 @@ def process_user_input(input_text, user_email):
                 goal_conv["months"] = months
                 goal_conv["stage"] = "confirm_goal"
                 monthly_savings = goal_conv["goal_amount"] / months
+
+                 # Show income and feasibility analysis before confirming the goal
+                user_income = get_user_income(user_email)
+                feasibility = calculate_goal_feasibility(goal_conv["goal_amount"], (datetime.now() + timedelta(days=months*30)), user_email)
+
+                feasibility_msg = (
+                    f"Your monthly income: **RM{user_income:.2f}**\n\n"
+                    f"To reach this goal, you need to save **RM{monthly_savings:.2f}/month**.\n\n"
+                    f"🧮 **Feasibility:** {feasibility['feasibility']}\n{feasibility['message']}\n\n"
+                )
+
                 return (
                     f"Perfect! You'll save RM{goal_conv['goal_amount']:.2f} in {timeframe_str}.\n"
-                    f"That means RM{monthly_savings:.2f} per month.\n"
+                    f"{feasibility_msg}"
                     f"Do you want to create this goal? Type 'yes' to confirm or 'no' to cancel."
                 )
             else:
@@ -3065,7 +3359,7 @@ def process_user_input(input_text, user_email):
                 months = goal_conv["months"]
                 monthly_savings = goal_amount / months
                 target_date = (datetime.now() + timedelta(days=months * 30)).strftime("%Y-%m-%d")
-                # Use add_goal instead of save_goal_to_database
+            # Use add_goal instead of save_goal_to_database
                 success, goal_id = add_goal(
                 user_email,
                 goal_name=goal_type,       # Use goal_type as name for simplicity
@@ -3074,21 +3368,22 @@ def process_user_input(input_text, user_email):
                 target_date=target_date,
                 monthly_contribution=monthly_savings,
                 goal_details={}            # Empty details for quick save
-            )
-            del st.session_state.goal_conversation
-            if success:
-                return (
-                    f"🎉 Your '{goal_type}' goal for RM{goal_amount:.2f} over {timeframe} is set!\n"
-                    f"You need to save RM{monthly_savings:.2f} per month. Best of luck!"
                 )
+                del st.session_state.goal_conversation
+                if success:
+                    return (
+                        f"🎉 Your '{goal_type}' goal for RM{goal_amount:.2f} over {timeframe} is set!\n"
+                        f"You need to save RM{monthly_savings:.2f} per month. Best of luck!"
+                    )
+                else:
+                    return "❌ Sorry, failed to save your goal. Please try again!"
+            elif input_lower in ["no", "n", "cancel"]:
+                del st.session_state.goal_conversation
+                return "No worries! Goal creation cancelled. You can start again anytime."
             else:
-                return "❌ Sorry, failed to save your goal. Please try again!"
-        elif input_lower in ["no", "n", "cancel"]:
-            del st.session_state.goal_conversation
-            return "No worries! Goal creation cancelled. You can start again anytime."
-        else:
-            return "Type 'yes' to confirm this goal, or 'no' to cancel."
+                return "Type 'yes' to confirm this goal, or 'no' to cancel."
 
+    # --- MAJOR GOAL KEYWORDS DETECTION ---
     major_goal_keywords = {
         "buy car": "Buy New Car",
         "buy a car": "Buy New Car",
@@ -3102,18 +3397,67 @@ def process_user_input(input_text, user_email):
         "travel": "Go To Travel",
         "new car": "Buy New Car",
         "new house": "Buy New House",
+        "set goal": "Custom Goal",
+        "set goal": "Custom Goal",          
+        "set goals": "Custom Goal",            
+        "set a goal": "Custom Goal",
+        "create goal": "Custom Goal",
+        "i want to buy": "Custom Purchase",
+        "i want to save for": "Custom Goal",
+        "save for": "Custom Goal",
+        "financial goal": "Custom Goal",
+        "savings goal": "Custom Goal",
     }
+
+    # Check for ANY goal-related phrases
+    goal_detected = False
+    goal_type_detected = None
+
     for phrase, goal_type in major_goal_keywords.items():
         if phrase in input_lower:
-            # Start a goal conversation with this major goal type
-            st.session_state.goal_conversation = {
-                "stage": "ask_amount",
-                "goal_type": goal_type,
-                "custom_prompted": True
-            }
-            return f"🎯 **Let's set your '{goal_type}' goal!**\n\nHow much do you want to save for this goal? (e.g., RM50,000 for car)\n\nI'll help you plan the savings timeline next!"
+            goal_detected = True
+            goal_type_detected = goal_type
+            break
+
+# Also check for general goal phrases
+    general_goal_phrases = ["goal", "save for", "want to buy", "plan to buy", "dream of"]
+    if not goal_detected:
+        for phrase in general_goal_phrases:
+            if phrase in input_lower:
+                goal_detected = True
+                goal_type_detected = "Custom Goal"
+                break
+
+# ✅ COMPULSORY INCOME CHECK - BLOCK ALL GOAL CREATION WITHOUT INCOME
+    if goal_detected:
+        if not has_income_set(user_email):
+            return (
+                "🚫 **INCOME REQUIRED BEFORE GOAL SETUP**\n\n"
+                "💰 **You must set your monthly income before creating any goals!**\n\n"
+                "This is compulsory because I need to:\n"
+                "• Check if your goals are realistic\n"
+                "• Calculate monthly savings needed\n"
+                "• Give you smart financial advice\n\n"
+                "👉 **Please set your income first:**\n"
+                "• 'My income is RM5000'\n"
+                "• 'Set income RM4000'\n"
+                "• 'I earn RM3000 per month'\n\n"
+                "💰 **No goals can be created without income!**"
+            )
     
-    if "budget_conversation" in st.session_state:
+        # If income is set, start goal conversation
+        st.session_state.goal_conversation = {
+            "stage": "ask_amount",
+            "goal_type": goal_type_detected,
+            "custom_prompted": True
+        }
+    
+        if goal_type_detected in ["Buy New Car", "Buy New House", "Go To Travel"]:
+            return f"🎯 **Let's set your '{goal_type_detected}' goal!**\n\nHow much do you want to save for this goal? (e.g., RM50,000 for car)\n\nI'll help you plan the savings timeline next!"
+        else:
+            return f"🎯 **Let's create your financial goal!**\n\nHow much do you want to save? (e.g., RM30,000)\n\nI'll help you plan the savings timeline next!"
+
+    if "budget_conversation" in st.session_state:  # ← This will NEVER be reached!
         return process_budget_conversation(input_text, user_email)
     
     # Define profanity words
@@ -3392,26 +3736,63 @@ def process_user_input(input_text, user_email):
         # ==================== PRIORITY 4.5: GOAL CONVERSATION HANDLING ====================
     
     # Check for goal-related phrases that should trigger goal conversation
+    # ==================== PRIORITY 7: GOAL CONVERSATION HANDLING ====================
+# Check for goal-related phrases that should trigger goal conversation
     goal_keywords = [
         "buy new car", "buy a car", "new car", "car goal",
         "buy new house", "buy a house", "new house", "house goal", "dream home",
         "go to travel", "travel goal", "vacation", "trip", "holiday",
         "want to buy", "plan to buy", "save for", "saving for",
-        "6 month later", "1 year later", "next year", "months later", "years later"
+        "6 month later", "1 year later", "next year", "months later", "years later",
+        "set goal", "create goal", "new goal", "financial goal", "savings goal"
     ]
-    
+
     # If user mentions goal-related keywords, handle as goal conversation
     if any(keyword in input_lower for keyword in goal_keywords):
-        # Check if it's a goal-setting request
+    # Check if it's a goal-setting request
         if any(phrase in input_lower for phrase in [
             "want to buy", "plan to buy", "save for", "saving for", 
-            "buy new", "get a new", "purchase", "goal", "dream"
+            "buy new", "get a new", "purchase", "goal", "dream",
+            "set goal", "create goal", "new goal", "financial goal"
         ]):
+            # ✅ ENHANCED: REQUIRE INCOME BEFORE STARTING ANY GOAL CONVERSATION
+            if not has_income_set(user_email):
+                return (
+                    "💡 **Before setting any financial goals, let's record your monthly income!**\n\n"
+                    "Knowing your income helps me analyze feasibility and give you smart advice for your goals.\n\n"
+                    "👉 Please type your income first, e.g. `My income is RM5000` or `Set income RM4000`.\n\n"
+                    "Once you've set your income, you can immediately set up your goals!"
+                )
+        
             # This should trigger goal conversation instead of expense detection
             return handle_goal_conversation(user_email, input_text)
     
     # ==================== PRIORITY 5: SPECIAL COMMANDS ====================
     # Handle button clicks and special commands
+
+    # Handle income viewing requests
+    income_view_patterns = [
+        "show my income", "view income", "view my income", "check income", 
+        "what is my income", "what's my income", "my income", "income setting",
+        "see my income", "display income", "current income", "monthly income"
+    ]
+
+    if any(pattern in input_lower for pattern in income_view_patterns):
+        return get_income_response(user_email)
+
+# Also add income update patterns
+    income_update_patterns = [
+        "update income", "change income", "modify income", "adjust income",
+        "set new income", "income update", "revise income"
+    ]
+
+    if any(pattern in input_lower for pattern in income_update_patterns):
+        if has_income_set(user_email):
+            current_income = get_user_income(user_email)
+            st.session_state.pending_income_update = True
+            return f"🔄 **Updating Your Income**\n\nYour current monthly income is: **RM{current_income:.2f}**\n\nWhat would you like to change it to? (e.g., 'RM4500' or 'set income to RM5000')"
+        else:
+            return "You haven't set any income yet. Please set your income first using: 'My income is RM5000' or 'Set income RM4000'"
     
     if any(cmd in input_text.lower() for cmd in ["set budget", "track expenses", "set a goal", "set goal"]):
         # Clear any pending states that might interfere
@@ -3442,71 +3823,12 @@ def process_user_input(input_text, user_email):
         st.session_state.budget_conversation = {"stage": "ask_category"}
         return "I'm so excited to help you set up a budget! 🎉 This is going to make such a difference in managing your money!\n\n**Which spending category would you like to start with?** Here are your options:\n\n🍽️ **Food** - groceries, restaurants, takeout\n\n🚗 **Transport** - gas, public transport, parking\n\n🎬 **Entertainment** - movies, games, subscriptions\n\n🛍️ **Shopping** - clothes, personal items\n\n💡 **Utilities** - electricity, water, internet, phone\n\n🏠 **Housing** - rent, mortgage payments\n\n⚕️ **Healthcare** - medical expenses, medicine\n\n📚 **Education** - books, courses, training\n\n📦 **Other** - miscellaneous expenses\n\nJust tell me which category you'd like to focus on first! I'll walk you through everything step by step. 😊"
 
-# Handle expense viewing requests with enhanced flexibility
-    from expenses_view import detect_expense_view_type, show_specific_day_expenses, show_specific_week_expenses, show_specific_month_expenses
-    
-    # Check for ambiguous day references (just day name without this/last qualifier)
-    day_names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-    input_lower = input_text.lower()
-    
-    # Check if input contains a day name but not "this" or "last" qualifier
-    contains_day = any(day in input_lower for day in day_names)
-    contains_qualifier = "this " in input_lower or "last " in input_lower or "previous " in input_lower
-    
-    if contains_day and not contains_qualifier and "expenses" in input_lower:
-        # Ambiguous day reference, ask for clarification
-        for day in day_names:
-            if day in input_lower:
-                day_name = day.title()
-                if len(day) <= 3:  # Convert short forms to full names
-                    if day == "mon": day_name = "Monday"
-                    elif day == "tue": day_name = "Tuesday"
-                    elif day == "wed": day_name = "Wednesday"
-                    elif day == "thu": day_name = "Thursday"
-                    elif day == "fri": day_name = "Friday"
-                    elif day == "sat": day_name = "Saturday"
-                    elif day == "sun": day_name = "Sunday"
-                
-                response = f"📅 **I need a bit more information about which {day_name} you mean.**\n\n"
-                response += f"Did you mean **'this {day_name}'** (the upcoming {day_name}) or **'last {day_name}'** (the most recent past {day_name})?🤔\n\n"
-                response += "**Please specify by typing:**\n\n"
-                response += f"• 'Show this {day_name.lower()} expenses'\n\n"
-                response += f"• 'Show last {day_name.lower()} expenses'\n\n"
-                response += "Or you can try these other options:\n"
-                response += "\n**👆 Viewing Options:**\n\n"
-                response += "\n• 'Show **[month name e.g. aug, september]** expenses' - View specific month\n\n"
-                response += "• 'Show **[week e.g. this week, last week]** expenses' - View weekly expenses\n\n"
-                response += "• 'Show **[day e.g. today, yesterday, mon-sun]** expenses' - View specific day spending\n\n"
-                response += "  Note: Please use 'this' or 'last' with days of week (mon-sun) for clarity\n"
-                return response
-    
-    # First check for expense viewing requests
-    expense_view_type = detect_expense_view_type(input_text)
-    if expense_view_type:
-        if expense_view_type == "day":
-            return show_specific_day_expenses(user_email, input_text, DB_PATH)
-        elif expense_view_type == "week":
-            return show_specific_week_expenses(user_email, input_text, DB_PATH)
-        elif expense_view_type == "month":
-            return show_specific_month_expenses(user_email, input_text, DB_PATH)
-        elif expense_view_type == "specific_date":
-            # Handle requests with specific date formats like "5/9"
-            response = "❌ **Unable to display expenses for specific dates in this format.**\n\n"
-            response += "I don't support specific date formats like '5/9' or '05-09'.\n\n"
-            response += "Instead, try one of these options:\n"
-            response += "**👆 Viewing Options:**\n"
-            response += "\n• 'Show **[month name e.g. aug, september]** expenses' - View specific month\n\n"
-            response += "• 'Show **[week e.g. this week, last week]** expenses' - View weekly expenses\n\n"
-            response += "• 'Show **[day e.g. today, yesterday, mon-sun]** expenses' - View specific day spending\n\n"
-            response += "  Note: Please use 'this' or 'last' with days of week (mon-sun) for clarity\n"
-            return response
-    
-    # Legacy expense viewing options (for backward compatibility)
+    # Handle expense viewing requests
     if input_text.lower() in ["show my daily expense", "show daily expense", "daily expense", "today's expense", "show today's expense"]:
-        return show_specific_day_expenses(user_email, "today", DB_PATH)
+        return show_daily_expenses(user_email)
 
     if input_text.lower() in ["show my monthly expenses", "show monthly expenses", "monthly expenses", "monthly summary", "show month's expenses", "show expenses for this month"]:
-        return show_specific_month_expenses(user_email, "this month", DB_PATH)
+        return show_monthly_expenses(user_email)
 
     # Handle income setting
     if any(word in input_text.lower() for word in ["income", "salary", "earn", "monthly income"]):
@@ -3731,7 +4053,7 @@ def process_user_input(input_text, user_email):
     
     # Handle general intents
     if intent_tag == "expense_query":
-        return show_specific_day_expenses(user_email, "today", DB_PATH)
+        return show_daily_expenses(user_email)
     
     elif intent_tag == "budget_query":
         return show_budget_status(user_email)
@@ -3810,6 +4132,209 @@ def get_user_expenses(user_email):
     except Exception as e:
         print(f"DEBUG: Error getting expenses: {e}")
         return []
+        
+def show_daily_expenses(user_email):
+    """
+    Show today's expenses with better formatting and weekly summary
+    """
+    from datetime import datetime, timedelta
+    
+    today = datetime.now().strftime("%A, %B %d, %Y")
+    today_short = datetime.now().strftime("%Y-%m-%d")  # 2025-09-03
+    
+    print(f"DEBUG: Today's date for filtering: {today_short}")
+    print(f"DEBUG: User email: {user_email}")
+    
+    # Get today's expenses using the correct database connection
+    try:
+        conn = sqlite3.connect(DB_PATH)  # Use DB_PATH instead of hardcoded path
+        c = conn.cursor()
+        
+        # Get today's expenses - FIXED QUERY
+        c.execute("""
+            SELECT amount, description, category, date
+            FROM expenses 
+            WHERE user_email = ? AND date = ?
+            ORDER BY id DESC
+        """, (user_email, today_short))
+        
+        today_expenses = c.fetchall()
+        
+        # Get this week's expenses for weekly summary
+        week_start = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        c.execute("""
+            SELECT amount, description, category, date
+            FROM expenses 
+            WHERE user_email = ? AND date >= ?
+            ORDER BY date DESC, id DESC
+        """, (user_email, week_start))
+        
+        week_expenses = c.fetchall()
+        conn.close()
+        
+        print(f"DEBUG: Found {len(today_expenses)} expenses for today")
+        print(f"DEBUG: Found {len(week_expenses)} expenses for this week")
+        
+    except Exception as e:
+        print(f"DEBUG: Database error: {e}")
+        return f"❌ **Error retrieving expenses:** {str(e)}\n\nPlease try again!"
+    
+    # Build response with proper formatting
+    response = f"📅 **{today}**\n\n"
+    
+    if not today_expenses:
+        response += "No expenses recorded for today yet! 💸\n\n"
+        response += "✨ **Ready to start tracking?**\n"
+        response += "• 'I spent RM8 on nasi lemak'\n"
+        response += "• 'RM15 for roti canai'\n" 
+        response += "• 'RM25 groceries at Aeon'\n\n"
+        response += "What did you spend money on today? 😊\n\n"
+    else:
+        # Calculate today's total
+        total_today = sum(float(exp[0]) for exp in today_expenses)
+        response += f"**Daily Total: RM{total_today:.2f}**\n\n"
+        
+        # Group by category for better display
+        category_totals = {}
+        
+        for expense in today_expenses:
+            amount = float(expense[0])
+            description = expense[1]
+            category = expense[2]
+            
+            # Add to category totals
+            if category not in category_totals:
+                category_totals[category] = 0
+            category_totals[category] += amount
+            
+            # Format individual expense with proper line breaks
+            response += f"• RM{amount:.2f} for **{description}** ({category.title()})\n"
+        
+        response += "\n"
+        
+        # Add category summary if multiple categories
+        if len(category_totals) > 1:
+            response += "💰 **Category Breakdown:**\n"
+            for category, total in category_totals.items():
+                response += f"• {category.title()}: RM{total:.2f}\n"
+            response += "\n"
+    
+    # Add weekly summary if there are weekly expenses
+    if week_expenses:
+        response += "📊 **This Week's Summary:**\n"
+        
+        # Group weekly expenses by date
+        weekly_by_date = {}
+        weekly_total = 0
+        
+        for expense in week_expenses:
+            date = expense[3]
+            amount = float(expense[0])
+            weekly_total += amount
+            
+            if date not in weekly_by_date:
+                weekly_by_date[date] = 0
+            weekly_by_date[date] += amount
+        
+        # Show last 7 days
+        response += f"**Weekly Total: RM{weekly_total:.2f}**\n\n"
+        
+        # Sort dates and show recent days
+        sorted_dates = sorted(weekly_by_date.items(), reverse=True)[:7]
+        for date, daily_total in sorted_dates:
+            try:
+                date_obj = datetime.strptime(date, "%Y-%m-%d")
+                formatted_date = date_obj.strftime("%a, %b %d")
+                response += f"• {formatted_date}: RM{daily_total:.2f}\n"
+            except:
+                response += f"• {date}: RM{daily_total:.2f}\n"
+        
+        response += "\n"
+    
+    # Add monthly prompt at the end
+    response += "📈 **Want to see your monthly expenses?** Just say 'show monthly expenses'! 📊"
+    
+    return response
+
+def show_monthly_expenses(user_email):
+    """
+    Show this month's expenses with better formatting
+    """
+    from datetime import datetime
+    
+    # Get current month info
+    now = datetime.now()
+    month_name = now.strftime("%B %Y")
+    month_start = now.replace(day=1).strftime("%Y-%m-%d")
+    
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        
+        # Get this month's expenses
+        c.execute("""
+            SELECT amount, description, category, date
+            FROM expenses 
+            WHERE user_email = ? AND date >= ?
+            ORDER BY date DESC, id DESC
+        """, (user_email, month_start))
+        
+        monthly_expenses = c.fetchall()
+        conn.close()
+        
+    except Exception as e:
+        return f"❌ **Error retrieving monthly expenses:** {str(e)}"
+    
+    response = f"📅 **{month_name}**\n\n"
+    
+    if not monthly_expenses:
+        response += "No expenses recorded this month yet! 💸\n\n"
+        response += "Start tracking your daily expenses to see your monthly summary! 😊"
+        return response
+    
+    # Calculate monthly total
+    monthly_total = sum(float(exp[0]) for exp in monthly_expenses)
+    response += f"**Monthly Total: RM{monthly_total:.2f}**\n\n"
+    
+    # Group by category
+    category_totals = {}
+    daily_totals = {}
+    
+    for expense in monthly_expenses:
+        amount = float(expense[0])
+        category = expense[2]
+        date = expense[3]
+        
+        # Category totals
+        if category not in category_totals:
+            category_totals[category] = 0
+        category_totals[category] += amount
+        
+        # Daily totals
+        if date not in daily_totals:
+            daily_totals[date] = 0
+        daily_totals[date] += amount
+    
+    # Show category breakdown
+    response += "💰 **Category Breakdown:**\n"
+    for category, total in sorted(category_totals.items(), key=lambda x: x[1], reverse=True):
+        percentage = (total / monthly_total) * 100
+        response += f"• {category.title()}: RM{total:.2f} ({percentage:.1f}%)\n"
+    
+    response += "\n"
+    
+    # Show recent daily totals (last 10 days)
+    response += "📊 **Recent Daily Spending:**\n"
+    recent_days = sorted(daily_totals.items(), reverse=True)[:10]
+    for date, total in recent_days:
+        try:
+            date_obj = datetime.strptime(date, "%Y-%m-%d")
+            formatted_date = date_obj.strftime("%a, %b %d")
+            response += f"• {formatted_date}: RM{total:.2f}\n"
+        except:
+            response += f"• {date}: RM{total:.2f}\n"
+    
+    return response
 
 # -------------------------------- UI Layout --------------------------------
 # Add a header
@@ -3867,8 +4392,9 @@ def create_annotated_chart(spending_data, title="Spending by Category"):
     return fig
 
 # Only show page selection if authenticated
+# Only show page selection if authenticated
 if st.session_state.authenticated:
-    page = st.sidebar.selectbox("Choose a page", ["Home", "Spending Analysis", "Budget Tracking", "About"])
+    page = st.sidebar.selectbox("Choose a page", ["Home", "Spending Analysis", "Budget Tracking", "Goals", "About"])
     
     # Add debug panel
     if st.sidebar.checkbox("Show Debug Info"):
@@ -3896,7 +4422,34 @@ if st.session_state.authenticated:
             # Check if last message contains confirmation question
             contains_confirmation = "is that the right category?" in last_msg.lower()
             st.sidebar.write(f"Contains confirmation question: {contains_confirmation}")
-    
+
+    # --- MOVE QUICK ACTIONS TO SIDEBAR BELOW Show Debug Info ---
+    st.sidebar.markdown("---")
+    st.sidebar.caption("🔍 Quick Actions:")
+    col_q1, col_q2 = st.sidebar.columns(2)
+    with col_q1:
+        if st.sidebar.button("📋 View Expenses", use_container_width=True, key='sidebar_view_expenses'):
+            st.session_state.messages.append({"role": "user", "content": "show my expenses"})
+            response = process_user_input("show my expenses", st.session_state.current_user)
+            st.session_state.messages.append({"role": "assistant", "content": response})
+            st.rerun()
+        if st.sidebar.button("💼 Check Budget", use_container_width=True, key='sidebar_check_budget'):
+            st.session_state.messages.append({"role": "user", "content": "show my budget"})
+            response = process_user_input("show my budget", st.session_state.current_user)
+            st.session_state.messages.append({"role": "assistant", "content": response})
+            st.rerun()
+    with col_q2:
+        if st.sidebar.button("🎯 View Goals", use_container_width=True, key='sidebar_view_goals'):
+            st.session_state.messages.append({"role": "user", "content": "show my goals"})
+            response = process_user_input("show my goals", st.session_state.current_user)
+            st.session_state.messages.append({"role": "assistant", "content": response})
+            st.rerun()
+        if st.sidebar.button("💡 Get Help", use_container_width=True, key='sidebar_get_help'):
+            st.session_state.messages.append({"role": "user", "content": "help"})
+            response = process_user_input("help", st.session_state.current_user)
+            st.session_state.messages.append({"role": "assistant", "content": response})
+            st.rerun()
+
     if st.sidebar.button("Logout"):
         st.session_state.authenticated = False
         st.session_state.current_user = None
@@ -4062,40 +4615,6 @@ elif page == "Home":
             response = process_user_input("set a goal", st.session_state.current_user)
             
             # Add response to messages
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            st.rerun()
-
-            # ADD THIS AFTER THE MAIN BUTTONS - Secondary action buttons
-    st.caption("🔍 Quick Actions:")
-    
-    # Create columns for secondary buttons
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        if st.button("📋 View Expenses", use_container_width=True):
-            st.session_state.messages.append({"role": "user", "content": "show my expenses"})
-            response = process_user_input("show my expenses", st.session_state.current_user)
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            st.rerun()
-    
-    with col2:
-        if st.button("💼 Check Budget", use_container_width=True):
-            st.session_state.messages.append({"role": "user", "content": "show my budget"})
-            response = process_user_input("show my budget", st.session_state.current_user)
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            st.rerun()
-    
-    with col3:
-        if st.button("🎯 View Goals", use_container_width=True):
-            st.session_state.messages.append({"role": "user", "content": "show my goals"})
-            response = process_user_input("show my goals", st.session_state.current_user)
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            st.rerun()
-    
-    with col4:
-        if st.button("💡 Get Help", use_container_width=True):
-            st.session_state.messages.append({"role": "user", "content": "help"})
-            response = process_user_input("help", st.session_state.current_user)
             st.session_state.messages.append({"role": "assistant", "content": response})
             st.rerun()
     

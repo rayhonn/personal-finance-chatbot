@@ -506,6 +506,22 @@
             "responses": [
                 "Here's your monthly expense summary! 📊"
             ]
+        },
+        {
+            "tag": "income_query",
+            "patterns": [
+                "show my income",
+                "view income",
+                "view my income",
+                "check my income",
+                "what is my income",
+                "what's my income",
+                "display income"
+            ],
+            "responses": [
+                "{income_response}"
+            ]
         }
+
     ]
 }
