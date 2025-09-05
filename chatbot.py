@@ -420,6 +420,19 @@ def update_expense_amount(expense_id, new_amount):
         st.error(f"Error updating amount: {str(e)}")
         return False
 
+# Function to update expense description
+def update_expense_description(expense_id, new_description):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("UPDATE expenses SET description = ? WHERE id = ?", (new_description, expense_id))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        st.error(f"Error updating description: {str(e)}")
+        return False
+
 # Function to categorize an expense description
 def categorize_expense(description):
     description = description.lower()
@@ -3483,8 +3496,8 @@ def process_user_input(input_text, user_email):
 
             elif input_lower in ["no", "n", "nope"] or "change" in input_lower or "wrong" in input_lower:
                 st.session_state.correction_stage = "ask_what_to_change"
-                return "No worries! Let's fix that right away! 🔧\n\n**What would you like to change?**\n• Say **'category'** to change the category\n• Say **'amount'** to change the amount\n\nWhat needs fixing? 😊"
-            
+                return "No worries! Let's fix that right away! 🔧\n\n**What would you like to change?**\n\n• Say **'category'** to change the category\n\n• Say **'amount'** to change the amount\n\n• Say **'description'** to change what the expense was for\n\nWhat needs fixing? 😊"
+
             else:
                 return "I didn't understand that. Is the category correct? Please answer with **yes** or **no**."
             
@@ -3498,10 +3511,13 @@ def process_user_input(input_text, user_email):
             elif "amount" in input_lower:
                 st.session_state.correction_stage = "change_amount"
                 return "What is the correct amount for this expense?"
+            elif "description" in input_lower or "item" in input_lower or "name" in input_lower or "what" in input_lower:
+                st.session_state.correction_stage = "change_description"
+                old_description = st.session_state.pending_expense["description"]
+                return f"The current description is '{old_description}'. What would you like to change it to?"
             else:
-                # Default to category change
-                st.session_state.correction_stage = "change_category"
-                return "I'll help you change the category. What category would you like to use instead?"
+                # Show options if input is unclear
+                return "What would you like to change about this expense?\n• Say **'category'** to change the category\n• Say **'amount'** to change the amount\n• Say **'description'** to change what the expense was for"
         
         elif st.session_state.correction_stage == "change_category":
             new_category = input_text.lower().strip()
@@ -3514,14 +3530,24 @@ def process_user_input(input_text, user_email):
                     category_match = category
                     break
             
-            # Update expense category
+            # Store new category temporarily for confirmation
             expense_id = st.session_state.pending_expense["id"]
-            if update_expense_category(expense_id, category_match):
-                st.session_state.correction_stage = None
-                del st.session_state.pending_expense
-                return f"✅ I've updated the category to '{category_match}'. Your expense has been recorded successfully."
-            else:
-                return "Sorry, I had trouble updating the category. Can you try again?"
+            old_category = st.session_state.pending_expense["category"]
+            
+            # Store the new data and move to confirmation stage
+            st.session_state.pending_expense["new_category"] = category_match
+            st.session_state.correction_stage = "confirm_category"
+            
+            # Show confirmation message with details
+            amount = st.session_state.pending_expense["amount"]
+            description = st.session_state.pending_expense["description"]
+            
+            return f"📝 **I'll update the category from '{old_category}' to '{category_match}'.**\n\n" + \
+                   f"Your expense will be:\n\n" + \
+                   f"• **Amount:** RM{amount:.2f}\n\n" + \
+                   f"• **Description:** {description}\n\n" + \
+                   f"• **Category:** {category_match}\n\n" + \
+                   f"✅ **Is this correct?** Please answer with **yes** or **no**."
         
         elif st.session_state.correction_stage == "change_amount":
             amount_match = re.search(r"(\d+\.?\d*)", input_lower)
@@ -3529,17 +3555,113 @@ def process_user_input(input_text, user_email):
                 try:
                     new_amount = float(amount_match.group(1))
                     expense_id = st.session_state.pending_expense["id"]
+                    old_amount = st.session_state.pending_expense["amount"]
                     
-                    if update_expense_amount(expense_id, new_amount):
-                        st.session_state.correction_stage = None
-                        del st.session_state.pending_expense
-                        return f"✅ I've updated the amount to RM{new_amount:.2f}. Your expense has been recorded successfully."
-                    else:
-                        return "Sorry, I had trouble updating the amount. Can you try again?"
+                    # Store the new amount for confirmation
+                    st.session_state.pending_expense["new_amount"] = new_amount
+                    st.session_state.correction_stage = "confirm_amount"
+                    
+                    # Show confirmation message with details
+                    description = st.session_state.pending_expense["description"]
+                    category = st.session_state.pending_expense["category"]
+                    
+                    return f"📝 **I'll update the amount from RM{old_amount:.2f} to RM{new_amount:.2f}.**\n\n" + \
+                           f"Your expense will be:\n\n" + \
+                           f"• **Amount:** RM{new_amount:.2f}\n\n" + \
+                           f"• **Description:** {description}\n\n" + \
+                           f"• **Category:** {category}\n\n" + \
+                           f"✅ **Is this correct?** Please answer with **yes** or **no**."
                 except ValueError:
                     return "I couldn't understand that amount. Please provide a number like '25' or '25.50'."
             else:
                 return "I couldn't find a valid amount. Please just provide the number, like '25' or '25.50'."
+                
+        elif st.session_state.correction_stage == "change_description":
+            new_description = input_text.strip()
+            if new_description:
+                expense_id = st.session_state.pending_expense["id"]
+                old_description = st.session_state.pending_expense["description"]
+                
+                # Store the new description for confirmation
+                st.session_state.pending_expense["new_description"] = new_description
+                st.session_state.correction_stage = "confirm_description"
+                
+                # Show confirmation message with details
+                amount = st.session_state.pending_expense["amount"]
+                category = st.session_state.pending_expense["category"]
+                
+                return f"📝 **I'll update the description from '{old_description}' to '{new_description}'.**\n\n" + \
+                       f"Your expense will be:\n\n" + \
+                       f"• **Amount:** RM{amount:.2f}\n\n" + \
+                       f"• **Description:** {new_description}\n\n" + \
+                       f"• **Category:** {category}\n\n" + \
+                       f"✅ **Is this correct?** Please answer with **yes** or **no**."
+            else:
+                return "Please provide a description for your expense."
+        
+        # === Confirmation Handlers ===
+        elif st.session_state.correction_stage == "confirm_category":
+            if input_lower in ["yes", "y", "yeah", "correct", "right", "yep", "sure"]:
+                expense_id = st.session_state.pending_expense["id"]
+                new_category = st.session_state.pending_expense["new_category"]
+                
+                # Actually update the category in the database
+                if update_expense_category(expense_id, new_category):
+                    st.session_state.correction_stage = None
+                    del st.session_state.pending_expense
+                    return f"✅ **Success!** I've updated the category to '{new_category}'.\n\n" + \
+                           f"Your expense has been recorded successfully. 🎉\n\n" + \
+                           f"What else would you like to do today? 😊"
+                else:
+                    return "Sorry, I had trouble updating the category. Can you try again?"
+            elif input_lower in ["no", "n", "nope"] or "change" in input_lower or "wrong" in input_lower:
+                # Go back to asking what to change
+                st.session_state.correction_stage = "ask_what_to_change"
+                return "No problem! Let's try again.\n\n**What would you like to change?**\n\n• Say **'category'** to change the category\n\n• Say **'amount'** to change the amount\n\n• Say **'description'** to change what the expense was for\n\nWhat needs fixing? 😊"
+            else:
+                return "I didn't understand that. Is this information correct? Please answer with **yes** or **no**."
+        
+        elif st.session_state.correction_stage == "confirm_amount":
+            if input_lower in ["yes", "y", "yeah", "correct", "right", "yep", "sure"]:
+                expense_id = st.session_state.pending_expense["id"]
+                new_amount = st.session_state.pending_expense["new_amount"]
+                
+                # Actually update the amount in the database
+                if update_expense_amount(expense_id, new_amount):
+                    st.session_state.correction_stage = None
+                    del st.session_state.pending_expense
+                    return f"✅ **Success!** I've updated the amount to RM{new_amount:.2f}.\n\n" + \
+                           f"Your expense has been recorded successfully. 🎉\n\n" + \
+                           f"What else would you like to do today? 😊"
+                else:
+                    return "Sorry, I had trouble updating the amount. Can you try again?"
+            elif input_lower in ["no", "n", "nope"] or "change" in input_lower or "wrong" in input_lower:
+                # Go back to asking what to change
+                st.session_state.correction_stage = "ask_what_to_change"
+                return "No problem! Let's try again.\n\n**What would you like to change?**\n\n• Say **'category'** to change the category\n\n• Say **'amount'** to change the amount\n\n• Say **'description'** to change what the expense was for\n\nWhat needs fixing? 😊"
+            else:
+                return "I didn't understand that. Is this information correct? Please answer with **yes** or **no**."
+        
+        elif st.session_state.correction_stage == "confirm_description":
+            if input_lower in ["yes", "y", "yeah", "correct", "right", "yep", "sure"]:
+                expense_id = st.session_state.pending_expense["id"]
+                new_description = st.session_state.pending_expense["new_description"]
+                
+                # Actually update the description in the database
+                if update_expense_description(expense_id, new_description):
+                    st.session_state.correction_stage = None
+                    del st.session_state.pending_expense
+                    return f"✅ **Success!** I've updated the description to '{new_description}'.\n\n" + \
+                           f"Your expense has been recorded successfully. 🎉\n\n" + \
+                           f"What else would you like to do today? 😊"
+                else:
+                    return "Sorry, I had trouble updating the description. Can you try again?"
+            elif input_lower in ["no", "n", "nope"] or "change" in input_lower or "wrong" in input_lower:
+                # Go back to asking what to change
+                st.session_state.correction_stage = "ask_what_to_change"
+                return "No problem! Let's try again.\n\n**What would you like to change?**\n\n• Say **'category'** to change the category\n\n• Say **'amount'** to change the amount\n\n• Say **'description'** to change what the expense was for\n\nWhat needs fixing? 😊"
+            else:
+                return "I didn't understand that. Is this information correct? Please answer with **yes** or **no**."
 
        # ==================== PRIORITY 3: MULTIPLE EXPENSES & EXPENSE CHANGES ====================
 
@@ -3559,7 +3681,7 @@ def process_user_input(input_text, user_email):
                     st.session_state.expense_change_mode = "ask_what_to_change"
                     
                     expense = expenses_list[expense_index]
-                    return f"What would you like to change about **RM{expense['amount']:.2f} for {expense['description']}**?\n\n• Say **'amount'** to change the price\n• Say **'description'** to change what you bought\n• Say **'category'** to change the category\n\nWhat needs to be fixed?"
+                    return f"What would you like to change about **RM{expense['amount']:.2f} for {expense['description']}**?\n\n• Say **'amount'** to change the price\n\n• Say **'description'** to change what you bought\n\n• Say **'category'** to change the category\n\nWhat needs to be fixed?"
                 else:
                     return f"Please choose a number between 1 and {len(expenses_list)}."
             else:
@@ -3598,10 +3720,10 @@ def process_user_input(input_text, user_email):
                     response = "✅ **Amount updated!** Here's your updated list:\n\n"
                     total_amount = 0
                     for i, expense in enumerate(expenses_list, 1):
-                        response += f"**{i}.** RM{expense['amount']:.2f} for **{expense['description']}** → *{expense['category'].title()}*\n"
+                        response += f"**{i}.** RM{expense['amount']:.2f} for **{expense['description']}** → *{expense['category'].title()}*\n\n"
                         total_amount += expense['amount']
                     
-                    response += f"\n💰 **Total:** RM{total_amount:.2f}\n\n✅ **Is this correct now?** Say 'Yes' to record or 'No' to make more changes."
+                    response += f"💰 **Total:** RM{total_amount:.2f}\n\n✅ **Is this correct now?** Say 'Yes' to record or 'No' to make more changes."
                     return response
                 else:
                     return "I couldn't find a valid amount. Please provide just the number, like '25' or '25.50'."
@@ -3619,10 +3741,10 @@ def process_user_input(input_text, user_email):
                 response = "✅ **Description updated!** Here's your updated list:\n\n"
                 total_amount = 0
                 for i, expense in enumerate(expenses_list, 1):
-                    response += f"**{i}.** RM{expense['amount']:.2f} for **{expense['description']}** → *{expense['category'].title()}*\n"
+                    response += f"**{i}.** RM{expense['amount']:.2f} for **{expense['description']}** → *{expense['category'].title()}*\n\n"
                     total_amount += expense['amount']
                 
-                response += f"\n💰 **Total:** RM{total_amount:.2f}\n\n✅ **Is this correct now?** Say 'Yes' to record or 'No' to make more changes."
+                response += f"💰 **Total:** RM{total_amount:.2f}\n\n✅ **Is this correct now?** Say 'Yes' to record or 'No' to make more changes."
                 return response
             
             elif st.session_state.expense_change_mode == "change_category":
@@ -3646,10 +3768,10 @@ def process_user_input(input_text, user_email):
                 response = "✅ **Category updated!** Here's your updated list:\n\n"
                 total_amount = 0
                 for i, expense in enumerate(expenses_list, 1):
-                    response += f"**{i}.** RM{expense['amount']:.2f} for **{expense['description']}** → *{expense['category'].title()}*\n"
+                    response += f"**{i}.** RM{expense['amount']:.2f} for **{expense['description']}** → *{expense['category'].title()}*\n\n"
                     total_amount += expense['amount']
                 
-                response += f"\n💰 **Total:** RM{total_amount:.2f}\n\n✅ **Is this correct now?** Say 'Yes' to record or 'No' to make more changes."
+                response += f"💰 **Total:** RM{total_amount:.2f}\n\n✅ **Is this correct now?** Say 'Yes' to record or 'No' to make more changes."
                 return response
 
     # SECOND: Handle regular multiple expenses confirmation (ONLY if not in change mode)
@@ -3668,9 +3790,9 @@ def process_user_input(input_text, user_email):
                 response += "📝 **Final Summary:**\n\n"
                 
                 for i, exp in enumerate(expenses_list, 1):
-                    response += f"**{i}.** RM{exp['amount']:.2f} for **{exp['description']}** → *{exp['category'].title()}* category\n"
+                    response += f"**{i}.** RM{exp['amount']:.2f} for **{exp['description']}** → *{exp['category'].title()}* category\n\n"
                 
-                response += f"\n💰 **Total Recorded:** RM{total_amount:.2f}\n"
+                response += f"💰 **Total Recorded:** RM{total_amount:.2f}\n\n"
                 response += f"📊 **Categories Used:** {len(set(exp['category'] for exp in expenses_list))} different categories\n\n"
                 response += "🎉 Great job tracking your expenses! What else can I help you with today?"
                 
@@ -3687,7 +3809,7 @@ def process_user_input(input_text, user_email):
             response += "Which expense would you like to change?\n\n"
             
             for i, exp in enumerate(expenses_list, 1):
-                response += f"**{i}.** RM{exp['amount']:.2f} for {exp['description']} ({exp['category'].title()})\n"
+                response += f"**{i}.** RM{exp['amount']:.2f} for {exp['description']} ({exp['category'].title()})\n\n"
             
             response += f"\nJust tell me the number (1, 2, 3, etc.)!"
             
@@ -3963,10 +4085,10 @@ def process_user_input(input_text, user_email):
         
         total_amount = 0
         for i, expense in enumerate(multiple_expenses, 1):
-            response += f"**{i}.** RM{expense['amount']:.2f} for **{expense['description']}** → *{expense['category'].title()}* category\n"
+            response += f"**{i}.** RM{expense['amount']:.2f} for **{expense['description']}** → *{expense['category'].title()}* category\n\n"
             total_amount += expense['amount']
         
-        response += f"\n💰 **Total Amount:** RM{total_amount:.2f}\n"
+        response += f"\n💰 **Total Amount:** RM{total_amount:.2f}\n\n"
         response += f"📊 **Summary:** {len(multiple_expenses)} expenses across {len(set(exp['category'] for exp in multiple_expenses))} different categories\n\n"
         response += "✅ **Is this correct?** Say **'Yes'** to record all expenses or **'No'** to make changes."
         
@@ -3989,7 +4111,7 @@ def process_user_input(input_text, user_email):
                 "description": description,
                 "category": category
             }
-            return f"I've recorded your expense: RM{amount:.2f} for {description} in the '{category}' category. Is that the right category?"
+            return f"I've recorded your expense: RM{amount:.2f} for {description} in the '{category}' category.\n\nIs that the right category?"
     
     else:
         print(f"DEBUG: ❌ No expenses detected in multiple detection, trying single")
@@ -4010,7 +4132,7 @@ def process_user_input(input_text, user_email):
                     "description": description,
                     "category": category
                 }
-                return f"I've recorded your expense: RM{amount:.2f} for {description} in the '{category}' category. Is that the right category?"
+                return f"I've recorded your expense: RM{amount:.2f} for {description} in the '{category}' category.\n\nIs that the right category?"
         else:
             print(f"DEBUG: ❌ No expenses detected at all")
     
