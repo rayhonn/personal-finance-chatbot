@@ -595,7 +595,6 @@ def detect_expense_view_type(input_text):
     date_patterns = [
         r'\d{1,2}/\d{1,2}',         # 5/9, 05/09
         r'\d{1,2}-\d{1,2}',          # 5-9, 05-09
-        r'\d{1,2}\.\d{1,2}',         # 5.9, 05.09
         r'\d{1,2} (?:of )?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)', # 5 of Jan, 5 Feb
     ]
     

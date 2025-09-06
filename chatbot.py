@@ -15,9 +15,10 @@ import difflib
 # Set page configuration
 st.set_page_config(page_title="Personal Finance Chatbot", page_icon="📊")
 
-# Add custom CSS for better button styling
+# Add custom CSS for better button styling and chat message positioning
 st.markdown("""
 <style>
+    /* Button styling */
     .stButton > button {
         height: 60px;
         font-size: 16px;
@@ -32,6 +33,37 @@ st.markdown("""
         color: #4CAF50;
         transform: translateY(-2px);
         box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    /* Chat message customization */
+    /* User messages right alignment */
+    .stChatMessage:has([data-testid="stChatMessageAvatarUser"]) {
+        display: flex;
+        flex-direction: row-reverse;
+        align-items: end;
+    }
+    
+    /* Right align user message content */
+    [data-testid="stChatMessageAvatarUser"] + [data-testid="stChatMessageContent"] {
+        text-align: right;
+        background-color: #e6f4ea !important;
+        color: #0b502a;
+        border-bottom-right-radius: 0 !important;
+    }
+    
+    /* Style assistant messages */
+    [data-testid="stChatMessageAvatarAssistant"] + [data-testid="stChatMessageContent"] {
+        background-color: #f0f2f5 !important;
+        color: #232323;
+        border-bottom-left-radius: 0 !important;
+    }
+    
+    /* Give all message bubbles a nicer appearance */
+    [data-testid="stChatMessageContent"] {
+        border-radius: 15px !important;
+        padding: 10px 15px !important;
+        max-width: 95% !important;
+        border: 1px solid rgba(0, 0, 0, 0.1) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -365,7 +397,7 @@ def save_users(users):
 
 # ------------------------------- Daily Spending Logging Functions -------------------------------
 # Function to add expense 
-def add_expense(user_email, amount, description, category):
+def add_expense(user_email, amount, description, category, date=None):
     """
     Add expense to database - FIXED VERSION
     """
@@ -373,15 +405,16 @@ def add_expense(user_email, amount, description, category):
         conn = sqlite3.connect(DB_PATH)  # ✅ Use DB_PATH
         c = conn.cursor()
         
-        current_date = datetime.now().strftime("%Y-%m-%d")
+        # Use the provided date or default to current date
+        expense_date = date.strftime("%Y-%m-%d") if date else datetime.now().strftime("%Y-%m-%d")
         
-        print(f"DEBUG: Saving expense - User: {user_email}, Amount: {amount}, Description: {description}, Category: {category}")
+        print(f"DEBUG: Saving expense - User: {user_email}, Amount: {amount}, Description: {description}, Category: {category}, Date: {expense_date}")
         
         # ✅ Remove datetime column, use only the columns that exist
         c.execute("""
             INSERT INTO expenses (user_email, amount, description, category, date) 
             VALUES (?, ?, ?, ?, ?)
-        """, (user_email, amount, description, category, current_date))
+        """, (user_email, amount, description, category, expense_date))
         
         expense_id = c.lastrowid
         conn.commit()
@@ -431,6 +464,19 @@ def update_expense_description(expense_id, new_description):
         return True
     except Exception as e:
         st.error(f"Error updating description: {str(e)}")
+        return False
+
+# Function to delete an expense
+def delete_expense(expense_id):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        st.error(f"Error deleting expense: {str(e)}")
         return False
 
 # Function to categorize an expense description
@@ -907,11 +953,11 @@ def get_budget_status(user_email, category=None, month=None, year=None):
                 status = "🟢 Good" if percent_used < 80 else "🟠 Watch" if percent_used < 100 else "🔴 Over"
                 
                 budget_text = f"**{category.title()} Budget for {month} {year}:**\n\n"
-                budget_text += f"• Budget: RM{budget_amount:.2f}\n"
-                budget_text += f"• Spent: RM{spent:.2f}\n"
-                budget_text += f"• Remaining: RM{remaining:.2f}\n"
-                budget_text += f"• Used: {percent_used:.1f}%\n"
-                budget_text += f"• Status: {status}\n"
+                budget_text += f"• Budget: RM{budget_amount:.2f}\n\n"
+                budget_text += f"• Spent: RM{spent:.2f}\n\n"
+                budget_text += f"• Remaining: RM{remaining:.2f}\n\n"
+                budget_text += f"• Used: {percent_used:.1f}%\n\n"
+                budget_text += f"• Status: {status}\n\n"
                 break
         else:
             budget_text = f"No budget set for {category.title()} yet."
@@ -1950,10 +1996,10 @@ def show_budget_status(user_email):
         response = f"📊 **Budget Overview for {current_month} {current_year}**\n\n"
         response += "No budgets set up yet! 💰\n\n"
         response += "🎯 **Ready to take control of your spending?**\n\n"
-        response += "Setting up budgets helps you:\n"
-        response += "• Track your spending by category\n"
-        response += "• Stay within your financial limits\n"
-        response += "• Build better money habits\n"
+        response += "Setting up budgets helps you:\n\n"
+        response += "• Track your spending by category\n\n"
+        response += "• Stay within your financial limits\n\n"
+        response += "• Build better money habits\n\n"
         response += "• Reach your financial goals faster\n\n"
         response += "💡 **Get started:** Just say 'set budget' and I'll walk you through it step by step!\n\n"
         response += "What category would you like to budget for first? 😊"
@@ -1968,9 +2014,9 @@ def show_budget_status(user_email):
     total_budget = sum(budget["amount"] for budget in budgets)
     total_spent = sum(spending.values()) if spending else 0
     
-    response += f"💰 **Overall Summary:**\n"
-    response += f"• Total Budget: RM{total_budget:.2f}\n"
-    response += f"• Total Spent: RM{total_spent:.2f}\n"
+    response += f"💰 **Overall Summary:**\n\n"
+    response += f"• Total Budget: RM{total_budget:.2f}\n\n"
+    response += f"• Total Spent: RM{total_spent:.2f}\n\n"
     response += f"• Remaining: RM{total_budget - total_spent:.2f}\n\n"
     
     response += "📋 **Budget Details:**\n\n"
@@ -1993,30 +2039,29 @@ def show_budget_status(user_email):
         else:
             status = "🔴 Over Budget"
         
-        response += f"**{category.title()}**\n"
-        response += f"├ Budget: RM{budget_amount:.2f}\n"
-        response += f"├ Spent: RM{spent:.2f} ({percent_used:.1f}%)\n"
-        response += f"├ Remaining: RM{remaining:.2f}\n"
+        response += f"**{category.title()}**\n\n"
+        response += f"├ Budget: RM{budget_amount:.2f}\n\n"
+        response += f"├ Spent: RM{spent:.2f} ({percent_used:.1f}%)\n\n"
+        response += f"├ Remaining: RM{remaining:.2f}\n\n"
         response += f"└ Status: {status}\n\n"
     
     # Add helpful tips
     over_budget_categories = [b["category"] for b in budgets if spending and spending.get(b["category"], 0) > b["amount"]]
     
     if over_budget_categories:
-        response += "⚠️ **Action Needed:**\n"
+        response += "⚠️ **Action Needed:**\n\n"
         response += f"You're over budget in: {', '.join([cat.title() for cat in over_budget_categories])}\n\n"
-        response += "💡 **Tips:**\n"
-        response += "• Review recent expenses in these categories\n"
-        response += "• Look for areas to cut back\n"
+        response += "💡 **Tips:**\n\n"
+        response += "• Review recent expenses in these categories\n\n"
+        response += "• Look for areas to cut back\n\n"
         response += "• Consider adjusting your budget if needed\n\n"
     else:
         response += "🎉 **Great job!** You're staying within all your budgets!\n\n"
     
-    response += "🔧 **Want to make changes?**\n"
-    response += "• Say 'set budget' to create new budgets\n"
-    response += "• Ask 'show food budget' for specific categories\n"
-    response += "• Say 'help' for more options"
-    
+    response += "🔧 **Want to make changes?**\n\n"
+    response += "• Say **'set budget'** to create new budgets\n\n"
+    response += "• Say **'show [category e.g.food, transport] budget'** for specific categories\n"
+
     return response
 
 def show_specific_budget(user_email, category):
@@ -2045,12 +2090,12 @@ def show_specific_budget(user_email, category):
         response = f"💡 **{category.title()} Budget for {current_month} {current_year}**\n\n"
         response += f"You haven't set a {category.lower()} budget yet! 📊\n\n"
         response += f"🎯 **Want to set your {category.lower()} budget?**\n\n"
-        response += f"Setting a {category.lower()} budget will help you:\n"
-        response += f"• Track your {category.lower()} spending\n"
-        response += f"• Stay within your financial limits\n"
-        response += f"• Build better spending habits\n"
+        response += f"Setting a {category.lower()} budget will help you:\n\n"
+        response += f"• Track your {category.lower()} spending\n\n"
+        response += f"• Stay within your financial limits\n\n"
+        response += f"• Build better spending habits\n\n"
         response += f"• Reach your financial goals faster\n\n"
-        response += f"💰 **Ready to get started?** Just say 'set {category.lower()} budget' and I'll walk you through it!\n\n"
+        response += f"💰 **Ready to get started?** \n\nJust say 'set {category.lower()} budget' and I'll walk you through it!\n\n"
         response += f"Or say 'set budget' to choose from all categories. What sounds good? 😊"
         return response
     
@@ -2078,10 +2123,10 @@ def show_specific_budget(user_email, category):
     
     response = f"📊 **{category.title()} Budget for {current_month} {current_year}**\n\n"
     
-    response += f"💰 **Budget Summary:**\n"
-    response += f"• Budget: RM{budget_amount:.2f}\n"
-    response += f"• Spent: RM{spent:.2f} ({percent_used:.1f}%)\n"
-    response += f"• Remaining: RM{remaining:.2f}\n"
+    response += f"💰 **Budget Summary:**\n\n"
+    response += f"• Budget: RM{budget_amount:.2f}\n\n"
+    response += f"• Spent: RM{spent:.2f} ({percent_used:.1f}%)\n\n"
+    response += f"• Remaining: RM{remaining:.2f}\n\n"
     response += f"• Status: {status}\n\n"
     
     response += f"💭 **{status_msg}**\n\n"
@@ -2094,24 +2139,23 @@ def show_specific_budget(user_email, category):
     
     # Add specific tips based on status
     if percent_used >= 100:
-        response += "🆘 **Action Needed:**\n"
-        response += f"• Review your recent {category.lower()} expenses\n"
-        response += f"• Look for ways to cut back on {category.lower()} spending\n"
+        response += "🆘 **Action Needed:**\n\n"
+        response += f"• Review your recent {category.lower()} expenses\n\n"
+        response += f"• Look for ways to cut back on {category.lower()} spending\n\n"
         response += f"• Consider increasing your {category.lower()} budget if needed\n\n"
     elif percent_used >= 80:
-        response += "⚡ **Tips to Stay on Track:**\n"
-        response += f"• Be mindful of {category.lower()} purchases for the rest of the month\n"
+        response += "⚡ **Tips to Stay on Track:**\n\n"
+        response += f"• Be mindful of {category.lower()} purchases for the rest of the month\n\n"
         response += f"• Look for deals and discounts on {category.lower()}\n"
         response += f"• Consider postponing non-essential {category.lower()} expenses\n\n"
     else:
-        response += "🎉 **You're doing great!**\n"
-        response += f"• Keep up the good work with your {category.lower()} spending\n"
+        response += "🎉 **You're doing great!**\n\n"
+        response += f"• Keep up the good work with your {category.lower()} spending\n\n"
         response += f"• You have plenty of room left in your {category.lower()} budget\n\n"
-    
-    response += "🔧 **Want to make changes?**\n"
+
+    response += "🔧 **Want to make changes?**\n\n"
     response += f"• Say 'set {category.lower()} budget' to update this budget\n"
     response += "• Say 'show budget' to see all your budgets\n"
-    response += "• Say 'help' for more options"
     
     return response
 
@@ -2935,7 +2979,7 @@ def process_budget_conversation(input_text, user_email):
     if stage == "ask_year":
         year = get_year_from_input(input_text)
         if not year or year < 2020 or year > 2100:
-            return "Please enter a valid year, e.g. 2025."
+            return "Please enter a year between 2020 and 2100 (e.g. 2025)."
         conv["year"] = year
         conv["stage"] = "confirm"
         return (f"Please confirm: Budget **RM{conv['amount']:.2f}** for **{conv['category'].title()}** in **{conv['month']} {year}**.\n"
@@ -2948,14 +2992,14 @@ def process_budget_conversation(input_text, user_email):
             result = set_budget(user_email, conv["category"], conv["amount"], conv["month"], conv["year"])
             del st.session_state.budget_conversation
             if result:
-                return (f"🎉 **Budget saved!** RM{conv['amount']:.2f} for {conv['category'].title()} in {conv['month']} {conv['year']}.\n"
+                return (f"🎉 **Budget saved!** RM{conv['amount']:.2f} for {conv['category'].title()} in {conv['month']} {conv['year']}.\n\n"
                         "You can now track your spending against this budget!")
             else:
                 return "Sorry, there was a problem saving your budget. Please try again."
         elif input_lower in ["no", "n", "change", "edit"]:
             conv["stage"] = "revise_part"
-            return ("No problem! 😊 Which part would you like to change?\n"
-                    "**Category, Amount, Month, or Year?**\n"
+            return ("No problem! 😊 Which part would you like to change?\n\n"
+                    "**Category, Amount, Month, or Year?**\n\n"
                     "Just type which one you'd like to update.")
         else:
             return "Please type 'yes' to confirm or 'change' to revise."
@@ -2984,7 +3028,7 @@ def process_budget_conversation(input_text, user_email):
             return "I couldn't figure out the category. Please type one of: Food, Transport, Entertainment, Shopping, Utilities, Housing, Healthcare, Education, Other."
         conv["category"] = category
         conv["stage"] = "confirm"
-        return (f"Updated! Please confirm: Budget **RM{conv['amount']:.2f}** for **{category.title()}** in **{conv['month']} {conv['year']}**.\n"
+        return (f"Updated! Please confirm: Budget **RM{conv['amount']:.2f}** for **{category.title()}** in **{conv['month']} {conv['year']}**.\n\n"
                 "Type 'yes' to confirm or 'change' to revise another part.")
 
     if stage == "revise_amount":
@@ -2993,7 +3037,7 @@ def process_budget_conversation(input_text, user_email):
             return "I couldn't find a valid amount. Please enter the budget amount in Ringgit, e.g. '500' or 'RM500'."
         conv["amount"] = amount
         conv["stage"] = "confirm"
-        return (f"Updated! Please confirm: Budget **RM{amount:.2f}** for **{conv['category'].title()}** in **{conv['month']} {conv['year']}**.\n"
+        return (f"Updated! Please confirm: Budget **RM{amount:.2f}** for **{conv['category'].title()}** in **{conv['month']} {conv['year']}**.\n\n"
                 "Type 'yes' to confirm or 'change' to revise another part.")
 
     if stage == "revise_month":
@@ -3002,7 +3046,7 @@ def process_budget_conversation(input_text, user_email):
             return "Please specify the new month (e.g., September)."
         conv["month"] = month
         conv["stage"] = "confirm"
-        return (f"Updated! Please confirm: Budget **RM{conv['amount']:.2f}** for **{conv['category'].title()}** in **{month} {conv['year']}**.\n"
+        return (f"Updated! Please confirm: Budget **RM{conv['amount']:.2f}** for **{conv['category'].title()}** in **{month} {conv['year']}**.\n\n"
                 "Type 'yes' to confirm or 'change' to revise another part.")
 
     if stage == "revise_year":
@@ -3011,7 +3055,7 @@ def process_budget_conversation(input_text, user_email):
             return "Please enter a valid year, e.g. 2025."
         conv["year"] = year
         conv["stage"] = "confirm"
-        return (f"Updated! Please confirm: Budget **RM{conv['amount']:.2f}** for **{conv['category'].title()}** in **{conv['month']} {year}**.\n"
+        return (f"Updated! Please confirm: Budget **RM{conv['amount']:.2f}** for **{conv['category'].title()}** in **{conv['month']} {year}**.\n\n"
                 "Type 'yes' to confirm or 'change' to revise another part.")
 
     # Fallback
@@ -3488,18 +3532,32 @@ def process_user_input(input_text, user_email):
     if assistant_messages and "pending_expense" in st.session_state:
         last_assistant_msg = assistant_messages[-1]["content"].lower()
         
-        if "is that the right category?" in last_assistant_msg:
+        if "is the details correct?" in last_assistant_msg:
             # Handle YES responses
             if input_lower in ["yes", "y", "yeah", "correct", "right", "yep", "sure"]:
                 del st.session_state.pending_expense
+                if "retry_confirmation" in st.session_state:
+                    del st.session_state.retry_confirmation
                 return "✅ **Perfect!** Your expense has been saved! 🎉\n\nYour spending tracking is getting better and better! What else would you like to record today? 😊"
 
             elif input_lower in ["no", "n", "nope"] or "change" in input_lower or "wrong" in input_lower:
                 st.session_state.correction_stage = "ask_what_to_change"
+                if "retry_confirmation" in st.session_state:
+                    del st.session_state.retry_confirmation
                 return "No worries! Let's fix that right away! 🔧\n\n**What would you like to change?**\n\n• Say **'category'** to change the category\n\n• Say **'amount'** to change the amount\n\n• Say **'description'** to change what the expense was for\n\nWhat needs fixing? 😊"
 
             else:
-                return "I didn't understand that. Is the category correct? Please answer with **yes** or **no**."
+                # Track how many times we've asked for confirmation
+                if "retry_confirmation" not in st.session_state:
+                    st.session_state.retry_confirmation = 1
+                else:
+                    st.session_state.retry_confirmation += 1
+                
+                # After 3 attempts, provide more guidance
+                if st.session_state.retry_confirmation >= 3:
+                    return "I'm still not understanding your response. Let me be more specific:\n\n👍 To confirm the details are correct, type **'yes'**\n\n👎 To make changes, type **'no'**\n\nPlease just answer with one of these options."
+                else:
+                    return "I didn't understand that. Is the details correct? Please answer with **yes** or **no**."
             
                 # ==================== PRIORITY 2: EXPENSE CORRECTION STAGES ====================
     if "correction_stage" in st.session_state and "pending_expense" in st.session_state:
@@ -3517,8 +3575,8 @@ def process_user_input(input_text, user_email):
                 return f"The current description is '{old_description}'. What would you like to change it to?"
             else:
                 # Show options if input is unclear
-                return "What would you like to change about this expense?\n• Say **'category'** to change the category\n• Say **'amount'** to change the amount\n• Say **'description'** to change what the expense was for"
-        
+                return "**What would you like to change?**\n\n• Say **'category'** to change the category\n\n• Say **'amount'** to change the amount\n\n• Say **'description'** to change what the expense was for\n\nWhat needs fixing? 😊"
+
         elif st.session_state.correction_stage == "change_category":
             new_category = input_text.lower().strip()
             standard_categories = ["food", "transport", "entertainment", "shopping", "utilities", "housing", "healthcare", "education", "other"]
@@ -3609,6 +3667,8 @@ def process_user_input(input_text, user_email):
                 if update_expense_category(expense_id, new_category):
                     st.session_state.correction_stage = None
                     del st.session_state.pending_expense
+                    if "retry_confirmation_category" in st.session_state:
+                        del st.session_state.retry_confirmation_category
                     return f"✅ **Success!** I've updated the category to '{new_category}'.\n\n" + \
                            f"Your expense has been recorded successfully. 🎉\n\n" + \
                            f"What else would you like to do today? 😊"
@@ -3617,9 +3677,21 @@ def process_user_input(input_text, user_email):
             elif input_lower in ["no", "n", "nope"] or "change" in input_lower or "wrong" in input_lower:
                 # Go back to asking what to change
                 st.session_state.correction_stage = "ask_what_to_change"
+                if "retry_confirmation_category" in st.session_state:
+                    del st.session_state.retry_confirmation_category
                 return "No problem! Let's try again.\n\n**What would you like to change?**\n\n• Say **'category'** to change the category\n\n• Say **'amount'** to change the amount\n\n• Say **'description'** to change what the expense was for\n\nWhat needs fixing? 😊"
             else:
-                return "I didn't understand that. Is this information correct? Please answer with **yes** or **no**."
+                # Track how many times we've asked for confirmation
+                if "retry_confirmation_category" not in st.session_state:
+                    st.session_state.retry_confirmation_category = 1
+                else:
+                    st.session_state.retry_confirmation_category += 1
+                
+                # After 3 attempts, provide more guidance
+                if st.session_state.retry_confirmation_category >= 3:
+                    return "I'm still not understanding your response. Let me be more specific:\n\n👍 To confirm the category change, type **'yes'**\n\n👎 To try a different change, type **'no'**\n\nPlease just answer with one of these options."
+                else:
+                    return "I didn't understand that. Is this information correct? Please answer with **yes** or **no**."
         
         elif st.session_state.correction_stage == "confirm_amount":
             if input_lower in ["yes", "y", "yeah", "correct", "right", "yep", "sure"]:
@@ -3630,6 +3702,8 @@ def process_user_input(input_text, user_email):
                 if update_expense_amount(expense_id, new_amount):
                     st.session_state.correction_stage = None
                     del st.session_state.pending_expense
+                    if "retry_confirmation_amount" in st.session_state:
+                        del st.session_state.retry_confirmation_amount
                     return f"✅ **Success!** I've updated the amount to RM{new_amount:.2f}.\n\n" + \
                            f"Your expense has been recorded successfully. 🎉\n\n" + \
                            f"What else would you like to do today? 😊"
@@ -3638,9 +3712,21 @@ def process_user_input(input_text, user_email):
             elif input_lower in ["no", "n", "nope"] or "change" in input_lower or "wrong" in input_lower:
                 # Go back to asking what to change
                 st.session_state.correction_stage = "ask_what_to_change"
+                if "retry_confirmation_amount" in st.session_state:
+                    del st.session_state.retry_confirmation_amount
                 return "No problem! Let's try again.\n\n**What would you like to change?**\n\n• Say **'category'** to change the category\n\n• Say **'amount'** to change the amount\n\n• Say **'description'** to change what the expense was for\n\nWhat needs fixing? 😊"
             else:
-                return "I didn't understand that. Is this information correct? Please answer with **yes** or **no**."
+                # Track how many times we've asked for confirmation
+                if "retry_confirmation_amount" not in st.session_state:
+                    st.session_state.retry_confirmation_amount = 1
+                else:
+                    st.session_state.retry_confirmation_amount += 1
+                
+                # After 3 attempts, provide more guidance
+                if st.session_state.retry_confirmation_amount >= 3:
+                    return "I'm still not understanding your response. Let me be more specific:\n\n👍 To confirm the amount change, type **'yes'**\n\n👎 To try a different change, type **'no'**\n\nPlease just answer with one of these options."
+                else:
+                    return "I didn't understand that. Is this information correct? Please answer with **yes** or **no**."
         
         elif st.session_state.correction_stage == "confirm_description":
             if input_lower in ["yes", "y", "yeah", "correct", "right", "yep", "sure"]:
@@ -3651,6 +3737,8 @@ def process_user_input(input_text, user_email):
                 if update_expense_description(expense_id, new_description):
                     st.session_state.correction_stage = None
                     del st.session_state.pending_expense
+                    if "retry_confirmation_description" in st.session_state:
+                        del st.session_state.retry_confirmation_description
                     return f"✅ **Success!** I've updated the description to '{new_description}'.\n\n" + \
                            f"Your expense has been recorded successfully. 🎉\n\n" + \
                            f"What else would you like to do today? 😊"
@@ -3659,9 +3747,21 @@ def process_user_input(input_text, user_email):
             elif input_lower in ["no", "n", "nope"] or "change" in input_lower or "wrong" in input_lower:
                 # Go back to asking what to change
                 st.session_state.correction_stage = "ask_what_to_change"
+                if "retry_confirmation_description" in st.session_state:
+                    del st.session_state.retry_confirmation_description
                 return "No problem! Let's try again.\n\n**What would you like to change?**\n\n• Say **'category'** to change the category\n\n• Say **'amount'** to change the amount\n\n• Say **'description'** to change what the expense was for\n\nWhat needs fixing? 😊"
             else:
-                return "I didn't understand that. Is this information correct? Please answer with **yes** or **no**."
+                # Track how many times we've asked for confirmation
+                if "retry_confirmation_description" not in st.session_state:
+                    st.session_state.retry_confirmation_description = 1
+                else:
+                    st.session_state.retry_confirmation_description += 1
+                
+                # After 3 attempts, provide more guidance
+                if st.session_state.retry_confirmation_description >= 3:
+                    return "I'm still not understanding your response. Let me be more specific:\n\n👍 To confirm the description change, type **'yes'**\n\n👎 To try a different change, type **'no'**\n\nPlease just answer with one of these options."
+                else:
+                    return "I didn't understand that. Is this information correct? Please answer with **yes** or **no**."
 
        # ==================== PRIORITY 3: MULTIPLE EXPENSES & EXPENSE CHANGES ====================
 
@@ -3813,10 +3913,24 @@ def process_user_input(input_text, user_email):
             
             response += f"\nJust tell me the number (1, 2, 3, etc.)!"
             
+            # Clear retry counter when providing a valid response
+            if "retry_confirmation_multiple" in st.session_state:
+                del st.session_state.retry_confirmation_multiple
+                
             return response
         
         else:
-            return "🤔 I didn't understand that. Please say **'Yes'** to confirm all expenses or **'No'** to make changes."
+            # Track how many times we've asked for confirmation
+            if "retry_confirmation_multiple" not in st.session_state:
+                st.session_state.retry_confirmation_multiple = 1
+            else:
+                st.session_state.retry_confirmation_multiple += 1
+            
+            # After 3 attempts, provide more guidance
+            if st.session_state.retry_confirmation_multiple >= 3:
+                return "I'm still not understanding your response. Let me be more specific:\n\n👍 To save all these expenses, type **'yes'**\n\n👎 To make changes to any expense, type **'no'**\n\nPlease just answer with one of these options."
+            else:
+                return "🤔 I didn't understand that. Please say **'Yes'** to confirm all expenses or **'No'** to make changes."
 
                 # ==================== PRIORITY 4: INPUT VALIDATION ====================
     # Now check length AFTER confirmation checks (THIS FIXES THE "NO" BUG!)
@@ -3945,12 +4059,71 @@ def process_user_input(input_text, user_email):
         st.session_state.budget_conversation = {"stage": "ask_category"}
         return "I'm so excited to help you set up a budget! 🎉 This is going to make such a difference in managing your money!\n\n**Which spending category would you like to start with?** Here are your options:\n\n🍽️ **Food** - groceries, restaurants, takeout\n\n🚗 **Transport** - gas, public transport, parking\n\n🎬 **Entertainment** - movies, games, subscriptions\n\n🛍️ **Shopping** - clothes, personal items\n\n💡 **Utilities** - electricity, water, internet, phone\n\n🏠 **Housing** - rent, mortgage payments\n\n⚕️ **Healthcare** - medical expenses, medicine\n\n📚 **Education** - books, courses, training\n\n📦 **Other** - miscellaneous expenses\n\nJust tell me which category you'd like to focus on first! I'll walk you through everything step by step. 😊"
 
-    # Handle expense viewing requests
+   # Handle expense viewing requests with enhanced flexibility
+    from expenses_view import detect_expense_view_type, show_specific_day_expenses, show_specific_week_expenses, show_specific_month_expenses
+    
+    # Check for ambiguous day references (just day name without this/last qualifier)
+    day_names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    input_lower = input_text.lower()
+    
+    # Check if input contains a day name but not "this" or "last" qualifier
+    contains_day = any(day in input_lower for day in day_names)
+    contains_qualifier = "this " in input_lower or "last " in input_lower or "previous " in input_lower
+    
+    if contains_day and not contains_qualifier and "expenses" in input_lower:
+        # Ambiguous day reference, ask for clarification
+        for day in day_names:
+            if day in input_lower:
+                day_name = day.title()
+                if len(day) <= 3:  # Convert short forms to full names
+                    if day == "mon": day_name = "Monday"
+                    elif day == "tue": day_name = "Tuesday"
+                    elif day == "wed": day_name = "Wednesday"
+                    elif day == "thu": day_name = "Thursday"
+                    elif day == "fri": day_name = "Friday"
+                    elif day == "sat": day_name = "Saturday"
+                    elif day == "sun": day_name = "Sunday"
+                
+                response = f"📅 **I need a bit more information about which {day_name} you mean.**\n\n"
+                response += f"Did you mean **'this {day_name}'** (the upcoming {day_name}) or **'last {day_name}'** (the most recent past {day_name})?🤔\n\n"
+                response += "**Please specify by typing:**\n\n"
+                response += f"• 'Show this {day_name.lower()} expenses'\n\n"
+                response += f"• 'Show last {day_name.lower()} expenses'\n\n"
+                response += "Or you can try these other options:\n"
+                response += "\n**👆 Viewing Options:**\n\n"
+                response += "\n• 'Show **[month name e.g. aug, september]** expenses' - View specific month\n\n"
+                response += "• 'Show **[week e.g. this week, last week]** expenses' - View weekly expenses\n\n"
+                response += "• 'Show **[day e.g. today, yesterday, mon-sun]** expenses' - View specific day spending\n\n"
+                response += "  Note: Please use 'this' or 'last' with days of week (mon-sun) for clarity\n"
+                return response
+    
+    # First check for expense viewing requests
+    expense_view_type = detect_expense_view_type(input_text)
+    if expense_view_type:
+        if expense_view_type == "day":
+            return show_specific_day_expenses(user_email, input_text, DB_PATH)
+        elif expense_view_type == "week":
+            return show_specific_week_expenses(user_email, input_text, DB_PATH)
+        elif expense_view_type == "month":
+            return show_specific_month_expenses(user_email, input_text, DB_PATH)
+        elif expense_view_type == "specific_date":
+            # Handle requests with specific date formats like "5/9"
+            response = "❌ **Unable to display expenses for specific dates in this format.**\n\n"
+            response += "I don't support specific date formats like '5/9' or '05-09'.\n\n"
+            response += "Instead, try one of these options:\n"
+            response += "**👆 Viewing Options:**\n"
+            response += "\n• 'Show **[month name e.g. aug, september]** expenses' - View specific month\n\n"
+            response += "• 'Show **[week e.g. this week, last week]** expenses' - View weekly expenses\n\n"
+            response += "• 'Show **[day e.g. today, yesterday, mon-sun]** expenses' - View specific day spending\n\n"
+            response += "  Note: Please use 'this' or 'last' with days of week (mon-sun) for clarity\n"
+            return response
+    
+    # Legacy expense viewing options (for backward compatibility)
     if input_text.lower() in ["show my daily expense", "show daily expense", "daily expense", "today's expense", "show today's expense"]:
-        return show_daily_expenses(user_email)
+        return show_specific_day_expenses(user_email, "today", DB_PATH)
 
     if input_text.lower() in ["show my monthly expenses", "show monthly expenses", "monthly expenses", "monthly summary", "show month's expenses", "show expenses for this month"]:
-        return show_monthly_expenses(user_email)
+        return show_specific_month_expenses(user_email, "this month", DB_PATH)
 
     # Handle income setting
     if any(word in input_text.lower() for word in ["income", "salary", "earn", "monthly income"]):
@@ -4111,7 +4284,7 @@ def process_user_input(input_text, user_email):
                 "description": description,
                 "category": category
             }
-            return f"I've recorded your expense: RM{amount:.2f} for {description} in the '{category}' category.\n\nIs that the right category?"
+            return f"RM{amount:.2f} for **{description}** → *{category.title()}* category\n\n✅Is the details correct?"
     
     else:
         print(f"DEBUG: ❌ No expenses detected in multiple detection, trying single")
@@ -4132,7 +4305,7 @@ def process_user_input(input_text, user_email):
                     "description": description,
                     "category": category
                 }
-                return f"I've recorded your expense: RM{amount:.2f} for {description} in the '{category}' category.\n\nIs that the right category?"
+                return f"RM{amount:.2f} for **{description}** → *{category.title()}* category\n\n✅Is the details correct?"
         else:
             print(f"DEBUG: ❌ No expenses detected at all")
     
@@ -4175,7 +4348,7 @@ def process_user_input(input_text, user_email):
     
     # Handle general intents
     if intent_tag == "expense_query":
-        return show_daily_expenses(user_email)
+        return show_specific_day_expenses(user_email, "today", DB_PATH)
     
     elif intent_tag == "budget_query":
         return show_budget_status(user_email)
@@ -4431,33 +4604,6 @@ def show_monthly_expenses(user_email):
         if category not in category_totals:
             category_totals[category] = 0
         category_totals[category] += amount
-        
-        # Daily totals
-        if date not in daily_totals:
-            daily_totals[date] = 0
-        daily_totals[date] += amount
-    
-    # Show category breakdown
-    response += "💰 **Category Breakdown:**\n"
-    for category, total in sorted(category_totals.items(), key=lambda x: x[1], reverse=True):
-        percentage = (total / monthly_total) * 100
-        response += f"• {category.title()}: RM{total:.2f} ({percentage:.1f}%)\n"
-    
-    response += "\n"
-    
-    # Show recent daily totals (last 10 days)
-    response += "📊 **Recent Daily Spending:**\n"
-    recent_days = sorted(daily_totals.items(), reverse=True)[:10]
-    for date, total in recent_days:
-        try:
-            date_obj = datetime.strptime(date, "%Y-%m-%d")
-            formatted_date = date_obj.strftime("%a, %b %d")
-            response += f"• {formatted_date}: RM{total:.2f}\n"
-        except:
-            response += f"• {date}: RM{total:.2f}\n"
-    
-    return response
-
 # -------------------------------- UI Layout --------------------------------
 # Add a header
 st.title("Personal Finance Chatbot")
@@ -4513,7 +4659,6 @@ def create_annotated_chart(spending_data, title="Spending by Category"):
     plt.tight_layout()
     return fig
 
-# Only show page selection if authenticated
 # Only show page selection if authenticated
 if st.session_state.authenticated:
     page = st.sidebar.selectbox("Choose a page", ["Home", "Spending Analysis", "Budget Tracking", "Goals", "About"])
@@ -5004,6 +5149,63 @@ elif page == "Spending Analysis":
     with analysis_tab3:
         st.subheader(f"Transactions for {selected_month} {selected_year}")
         
+        # Status message area to show operation results without constant reruns
+        if "pending_action" in st.session_state:
+            if st.session_state.pending_action == "delete_success":
+                st.success("Expense deleted successfully!")
+                # Clear the message after displaying it once
+                st.session_state.pending_action = None
+            elif st.session_state.pending_action == "add_success":
+                st.success("Expense added successfully!")
+                st.session_state.pending_action = None
+            elif st.session_state.pending_action == "update_success":
+                st.success("Expense updated successfully!")
+                st.session_state.pending_action = None
+        
+        # Add new expense functionality in a collapsed expander
+        with st.expander("➕ Add New Expense", expanded=False):
+            # Create two columns for date and description
+            col1, col2 = st.columns(2)
+            with col1:
+                new_exp_date = st.date_input("Date", value=datetime.now().date())
+            with col2:
+                new_exp_desc = st.text_input("Description")
+            
+            # Create two columns for amount and category
+            col3, col4 = st.columns(2)
+            with col3:
+                new_exp_amount = st.number_input("Amount (RM)", min_value=0.01, step=0.01)
+            with col4:
+                # Get all unique categories from existing expenses for the dropdown
+                all_cats = sorted(set([exp["category"].title() for exp in expenses]) if expenses else [])
+                standard_cats = ["Food", "Transport", "Entertainment", "Shopping", "Utilities", "Housing", "Healthcare", "Education", "Other"]
+                
+                # Combine standard categories with existing ones
+                available_cats = sorted(set(standard_cats + all_cats))
+                new_exp_cat = st.selectbox("Category", available_cats)
+            
+            # Add expense button
+            if st.button("Add Expense"):
+                if new_exp_desc and new_exp_amount > 0:
+                    # Add the expense to the database with the selected date
+                    success, _ = add_expense(
+                        user_email,
+                        new_exp_amount,
+                        new_exp_desc,
+                        new_exp_cat.lower(),
+                        new_exp_date
+                    )
+                    
+                    if success:
+                        # Set the pending action to show success message after refresh
+                        st.session_state.pending_action = "add_success"
+                        # Force a complete page reload to refresh all tabs data
+                        st.rerun()
+                    else:
+                        st.error("Failed to add expense. Please try again.")
+                else:
+                    st.warning("Please enter a description and a valid amount.")
+        
         if expenses:
             # Add category filter
             all_categories = sorted(set(exp["category"].title() for exp in expenses))
@@ -5029,6 +5231,10 @@ elif page == "Spending Analysis":
             # Sort dates in reverse chronological order (newest first)
             sorted_dates = sorted(grouped_expenses.keys(), reverse=True)
             
+            # Store any expense that needs to be edited
+            if "edit_expense_id" not in st.session_state:
+                st.session_state.edit_expense_id = None
+            
             # Display transactions grouped by date
             for date in sorted_dates:
                 # Format the date header
@@ -5041,16 +5247,83 @@ elif page == "Spending Analysis":
                     
                     # Create expander for each date
                     with st.expander(f"{formatted_date} - RM{daily_total:.2f}", expanded=True):
-                        # Create a DataFrame for this date's transactions
+                        # Create a DataFrame for this date's transactions with additional action column
                         date_expenses = grouped_expenses[date]
-                        date_df = pd.DataFrame({
-                            "Description": [exp["description"] for exp in date_expenses],
-                            "Category": [exp["category"].title() for exp in date_expenses],
-                            "Amount": [f"RM{exp['amount']:.2f}" for exp in date_expenses]
-                        })
                         
-                        # Display the DataFrame with a clean index
-                        st.dataframe(date_df, use_container_width=True, hide_index=True)
+                        # Add action buttons after the table
+                        for i, expense in enumerate(date_expenses):
+                            exp_id = expense["id"]
+                            
+                            # Check if this expense is being edited
+                            is_editing = st.session_state.edit_expense_id == exp_id
+                            
+                            if is_editing:
+                                # Edit mode
+                                with st.container():
+                                    st.markdown(f"**Editing expense:** {expense['description']}")
+                                    
+                                    # Create two columns for description and amount
+                                    edit_col1, edit_col2 = st.columns(2)
+                                    with edit_col1:
+                                        new_description = st.text_input("Description", value=expense["description"], key=f"edit_desc_{exp_id}")
+                                    with edit_col2:
+                                        new_amount = st.number_input("Amount (RM)", value=expense["amount"], min_value=0.01, step=0.01, key=f"edit_amount_{exp_id}")
+                                    
+                                    # Create a column for category
+                                    new_category = st.selectbox("Category", available_cats, index=available_cats.index(expense["category"].title()) if expense["category"].title() in available_cats else 0, key=f"edit_cat_{exp_id}")
+                                    
+                                    # Create two columns for buttons
+                                    save_col, cancel_col = st.columns(2)
+                                    with save_col:
+                                        if st.button("Save Changes", key=f"save_{exp_id}"):
+                                            # Update all expense fields
+                                            update_desc = update_expense_description(exp_id, new_description)
+                                            update_amt = update_expense_amount(exp_id, new_amount)
+                                            update_cat = update_expense_category(exp_id, new_category.lower())
+                                            
+                                            if update_desc and update_amt and update_cat:
+                                                # Clear the edit mode and set a success message
+                                                st.session_state.edit_expense_id = None
+                                                st.session_state.pending_action = "update_success"
+                                                
+                                                # Force a complete page reload to refresh all tabs data
+                                                st.rerun()
+                                            else:
+                                                st.error("Failed to update expense. Please try again.")
+                                    
+                                    with cancel_col:
+                                        if st.button("Cancel", key=f"cancel_{exp_id}"):
+                                            st.session_state.edit_expense_id = None
+                                            st.rerun()
+                            else:
+                                # Normal display with action buttons
+                                col1, col2, col3, col4 = st.columns([5, 2, 2, 1])
+                                
+                                with col1:
+                                    st.write(expense["description"])
+                                with col2:
+                                    st.write(f"RM{expense['amount']:.2f}")
+                                with col3:
+                                    st.write(expense["category"].title())
+                                with col4:
+                                    # Action buttons in a dropdown to save space
+                                    action = st.selectbox("", ["Actions", "✏️ Edit", "🗑️ Delete"], key=f"action_{exp_id}", label_visibility="collapsed")
+                                    if action == "✏️ Edit":
+                                        st.session_state.edit_expense_id = exp_id
+                                        st.rerun()
+                                    elif action == "🗑️ Delete":
+                                        if delete_expense(exp_id):
+                                            # Set the pending action to show success message after refresh
+                                            st.session_state.pending_action = "delete_success"
+                                            # Force a complete page reload to refresh all tabs data
+                                            st.rerun()
+                                        else:
+                                            st.error("Failed to delete expense.")
+                            
+                            # Add a light separator between expenses if not the last one
+                            if i < len(date_expenses) - 1:
+                                st.markdown("---")
+                        
                 except Exception as e:
                     st.error(f"Error formatting date {date}: {str(e)}")
             
@@ -5064,7 +5337,7 @@ elif page == "Spending Analysis":
                 mime="text/csv"
             )
         else:
-            st.info(f"No transactions recorded for {selected_month} {selected_year}. Start recording your expenses through the chatbot.")
+            st.info(f"No transactions recorded for {selected_month} {selected_year}. Use the 'Add New Expense' option above or start recording your expenses through the chatbot.")
 
 elif page == "Budget Tracking":
     st.markdown("# Budget Tracking 📊")
@@ -5506,3 +5779,4 @@ elif page == "About":
     ### Privacy:
     Your financial data is stored securely and is only accessible to you when logged in.
     """)
+
