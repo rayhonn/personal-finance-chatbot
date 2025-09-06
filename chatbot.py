@@ -4858,63 +4858,36 @@ def create_annotated_chart(spending_data, title="Spending by Category"):
 
 # Only show page selection if authenticated
 if st.session_state.authenticated:
-    page = st.sidebar.selectbox("Choose a page", ["Home", "Spending Analysis", "Budget Tracking", "Goals", "About"])
+    # Rename tabs to be more intuitive
+    page_options = ["💬 Chat", "📊 Expenses", "💰 Budget", "🎯 Goals", "ℹ️ About"]
     
-    # Add debug panel
-    if st.sidebar.checkbox("Show Debug Info"):
-        st.sidebar.subheader("Debug Information")
-        
-        if "debug_info" in st.session_state:
-            st.sidebar.text_area("Debug Log", st.session_state.debug_info, height=300)
-        
-        if "pending_expense" in st.session_state:
-            st.sidebar.write("Pending expense:")
-            st.sidebar.write(st.session_state.pending_expense)
-        
-        if "correction_stage" in st.session_state and st.session_state.correction_stage:
-            st.sidebar.write(f"Correction stage: {st.session_state.correction_stage}")
-        
-        if "custom_categories" in st.session_state and st.session_state.custom_categories:
-            st.sidebar.write("Custom categories:")
-            st.sidebar.write(st.session_state.custom_categories)
-        
-        if st.session_state.messages:
-            st.sidebar.write("Last message:")
-            last_msg = st.session_state.messages[-1]["content"]
-            st.sidebar.write(last_msg[:100] + "..." if len(last_msg) > 100 else last_msg)
-            
-            # Check if last message contains confirmation question
-            contains_confirmation = "is that the right category?" in last_msg.lower()
-            st.sidebar.write(f"Contains confirmation question: {contains_confirmation}")
-
-    # --- MOVE QUICK ACTIONS TO SIDEBAR BELOW Show Debug Info ---
+    # Page name mapping 
+    page_mapping = {
+        "💬 Chat": "Home",
+        "📊 Expenses": "Spending Analysis",
+        "💰 Budget": "Budget Tracking",
+        "🎯 Goals": "Financial Goals",
+        "ℹ️ About": "About"
+    }
+    
+    # Create the sidebar navigation
+    selected = st.sidebar.selectbox(
+        "Navigation", 
+        page_options,
+        format_func=lambda x: x
+    )
+    
+    # Map selected display name to internal page name
+    page = page_mapping.get(selected, "Home")
+    
+    # Add space before logout button at bottom
+    st.sidebar.markdown("<br>" * 5, unsafe_allow_html=True)
+    
+    # --- Logout button in sidebar ---
     st.sidebar.markdown("---")
-    st.sidebar.caption("🔍 Quick Actions:")
-    col_q1, col_q2 = st.sidebar.columns(2)
-    with col_q1:
-        if st.sidebar.button("📋 View Expenses", use_container_width=True, key='sidebar_view_expenses'):
-            st.session_state.messages.append({"role": "user", "content": "show my expenses"})
-            response = process_user_input("show my expenses", st.session_state.current_user)
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            st.rerun()
-        if st.sidebar.button("💼 Check Budget", use_container_width=True, key='sidebar_check_budget'):
-            st.session_state.messages.append({"role": "user", "content": "show my budget"})
-            response = process_user_input("show my budget", st.session_state.current_user)
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            st.rerun()
-    with col_q2:
-        if st.sidebar.button("🎯 View Goals", use_container_width=True, key='sidebar_view_goals'):
-            st.session_state.messages.append({"role": "user", "content": "show my goals"})
-            response = process_user_input("show my goals", st.session_state.current_user)
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            st.rerun()
-        if st.sidebar.button("💡 Get Help", use_container_width=True, key='sidebar_get_help'):
-            st.session_state.messages.append({"role": "user", "content": "help"})
-            response = process_user_input("help", st.session_state.current_user)
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            st.rerun()
-
-    if st.sidebar.button("Logout"):
+    
+    # Create logout button
+    if st.sidebar.button("🚪 Logout", key="logout_btn", use_container_width=True):
         st.session_state.authenticated = False
         st.session_state.current_user = None
         st.session_state.messages = []  # Clear chat history on logout
@@ -5034,54 +5007,34 @@ elif page == "Home":
     # Enhanced welcome header
     st.header(f"Welcome, {user_name}! 👋")
 
-    # ADD THIS NEW SECTION - Quick Action Buttons
-    st.subheader("💡 What can I help with?")
-    
-    # Create three columns for the main action buttons
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        if st.button("💰 Track Expenses", 
-                    help="Record your daily spending", 
-                    use_container_width=True):
-            # Simulate user clicking "track expenses"
-            st.session_state.messages.append({"role": "user", "content": "track expenses"})
-            
-            # Process the input and get response
-            response = process_user_input("track expenses", st.session_state.current_user)
-            
-            # Add response to messages
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            st.rerun()
-    
-    with col2:
-        if st.button("📊 Set Budgets", 
-                    help="Create and manage your monthly budgets", 
-                    use_container_width=True):
-            # Simulate user clicking "set budget"
-            st.session_state.messages.append({"role": "user", "content": "set budget"})
-            
-            # Process the input and get response
-            response = process_user_input("set budget", st.session_state.current_user)
-            
-            # Add response to messages
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            st.rerun()
-    
-    with col3:
-        if st.button("🎯 Create Goals", 
-                    help="Set financial goals and track progress", 
-                    use_container_width=True):
-            # Simulate user clicking "set a goal"
-            st.session_state.messages.append({"role": "user", "content": "set a goal"})
-            
-            # Process the input and get response
-            response = process_user_input("set a goal", st.session_state.current_user)
-            
-            # Add response to messages
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            st.rerun()
-    
+    # Add a single help button at the top
+    with st.expander("💡 How to use this chatbot", expanded=False):
+        st.markdown("""
+        ### 🤖 About Your Finance Assistant
+        
+        This AI chatbot helps you manage your personal finances through simple conversations. Just type what you want to do!
+        
+        ### 🔍 Main Features:
+        
+        **1️⃣ Track Expenses**
+        - Add spending by saying: *"I spent RM25.50 on lunch"*
+        - Add multiple expenses: *"RM15 for movie and RM10 for lunch"*
+        - View expenses: *"Show my expenses this week"*
+        
+        **2️⃣ Budget Management**
+        - Set budgets: *"Set food budget RM500"*
+        - Check status: *"Show my budget"* or *"Show food budget"*
+        
+        **3️⃣ Financial Goals**
+        - Set goals: *"Set goal for vacation"*
+        - Track progress: *"Show my goals"*
+        
+        **📊 The Sidebar Tabs:**
+        - **Expenses:** Visual breakdown of your expenses
+        - **Budget:** See how you're doing against your budgets
+        - **Goals:** Visual progress of your financial goals
+        - **About:** Learn more about the app features
+        """)
     # Add a divider between buttons and chat
     st.divider()
     
@@ -5128,9 +5081,21 @@ elif page == "Home":
         st.session_state.messages.append({"role": "assistant", "content": response})
 
 elif page == "Spending Analysis":
-    st.markdown("# Spending Analysis 💰")
-    st.sidebar.markdown("# Spending Analysis 💰")
-    
+    st.markdown("# Expenses Records 📊")
+    # Add description with helpful information
+    with st.expander("ℹ️ About this tab", expanded=False):
+        st.markdown("""
+        ### 📊 Expenses Records Dashboard
+
+        This tab provides a visual breakdown of your spending habits. You can:
+        
+        - **Filter by month and year** to analyze spending in specific time periods
+        - **View spending by category** to identify where your money goes
+        - **See detailed expenses records** with the ability to edit or delete entries
+                    
+        **💡 Tip:** Regularly reviewing your expenses can help you make informed budgeting decisions and achieve your financial goals! 🎯
+        """)
+
     # Get the current user's email
     user_email = st.session_state.current_user
     
@@ -5537,9 +5502,22 @@ elif page == "Spending Analysis":
             st.info(f"No transactions recorded for {selected_month} {selected_year}. Use the 'Add New Expense' option above or start recording your expenses through the chatbot.")
 
 elif page == "Budget Tracking":
-    st.markdown("# Budget Tracking 📊")
-    st.sidebar.markdown("# Budget Tracking 📊")
-    
+    st.markdown("# Budget Tracking 💰")
+    # Add description with helpful information
+    with st.expander("ℹ️ About this tab", expanded=False):
+        st.markdown("""
+        ### 💰 Budget Tracking Dashboard
+        
+        This tab helps you manage and monitor your budget limits. You can:
+        
+        - **View your current budget status** across all categories
+        - **Track spending against budget limits** to avoid overspending
+        - **Identify budget categories** that need attention
+        - **Set new budgets** for different categories
+        
+        **💡 Tip:** Set budgets for your most common spending categories to better manage your finances.
+        """)
+
     # Get the current user's email
     user_email = st.session_state.current_user
     
@@ -5636,10 +5614,23 @@ elif page == "Budget Tracking":
                 st.success(f"Budget of RM{budget_amount:.2f} set for {selected_category} in {selected_month} {selected_year}.")
                 st.rerun()  # Refresh to show the new budget
 
-elif page == "Goals":
-    st.title("🎯 Your Financial Dreams & Goals")
-    st.sidebar.title("🎯 Financial Goals")
-    
+elif page == "Financial Goals":
+    st.title("🎯 Your Financial Goals")
+    # Add description with helpful information
+    with st.expander("ℹ️ About this tab", expanded=False):
+        st.markdown("""
+        ### 🎯 Financial Goals Dashboard
+        
+        This tab helps you set and track progress toward your financial dreams. You can:
+        
+        - **View all your financial goals** in one place
+        - **Track progress** toward each goal with detailed metrics
+        - **Add contributions** to your existing goals
+        - **Set new goals** for your future dreams
+        - **Get personalized suggestions** for realistic saving targets
+        
+        **💡 Tip:** Break large goals into smaller milestones to make them more achievable and track your progress more effectively.
+        """)
     # Get the current user's email
     user_email = st.session_state.current_user
     
@@ -5955,25 +5946,85 @@ elif page == "Goals":
                 st.error("Please fill in the goal name and target amount!")
         
 elif page == "About":
-    st.header("About Personal Finance Chatbot")
+    st.header("💡 About Personal Finance Chatbot")
     st.write("""
-    This Personal Finance Chatbot is designed to make it easy for users to record daily expenses through simple interactive conversations. 
-    The goal is to encourage better money management by providing insights into spending patterns and giving personalized savings advice.
-    
-    ### Features:
-    1. **Daily Spending Logging**: Easily record your expenses through chat
-    2. **Spending Analysis**: View your spending patterns by category
-    3. **Savings Advice**: Get personalized tips based on your spending habits
-    4. **Budget Tracking**: Set and track your monthly budget
-    
-    ### How to Use:
-    - **Record an expense**: Type something like "I spent RM50 on groceries" or "RM20 for lunch"
-    - **View your expenses**: Ask "Show me my recent expenses" or "What did I spend money on?"
-    - **Get spending summary**: Ask "What's my spending summary?" or "Show me my spending by category"
-    - **Budget management**: Say "Set a budget" or check "How am I doing on my budget?"
-    - **Savings advice**: Ask "How can I save money?" for personalized tips
+    The **Personal Finance Chatbot** is your smart companion for managing money with ease.  
+    Instead of filling long forms or spreadsheets, you can simply chat with the system using natural, everyday language.  
+    Whether it’s tracking daily expenses, setting budgets, or planning long-term savings goals, this chatbot makes money management interactive and simple.
+
+    ---
+    ### ✨ Core Functions
+
+    #### 1️⃣ Add Expenses
+    Record your daily spending with simple messages.  
+    **Examples:**
+    - "I spent RM25.50 on lunch"  
+      → Amount: `25.50`, Description: `lunch`, Category: `Food`  
+    - "RM15 for movie and RM10 for lunch"  
+      → Amounts: `15.00`, `10.00`, Descriptions: `movie`, `lunch`, Categories: `Entertainment`, `Food`  
+
+    ✅ **Benefit**: Automatically saves multiple expenses at once, categorizes them, and builds a clear spending record.
+
+    ---
+
+    #### 2️⃣ Show Expenses
+    View your spending history by day, week, or month.  
+    **Examples:**
+    - "Show August expenses" → Monthly summary  
+    - "Show this week expenses" → Weekly view  
+    - "Show yesterday expenses" → Daily details  
+    *(Tip: Use 'this' or 'last' with days of week for clarity, e.g., "last Monday")*  
+
+    ✅ **Benefit**: Flexible tracking helps you spot patterns, compare timelines, and identify where your money goes.
+
+    ---
+
+    #### 3️⃣ Set Budget
+    Create budgets to manage your money better.  
+    **Examples:**
+    - "Set budget" → Start interactive budget setup  
+    - "Set food budget" → Quick category budget  
+
+    You will be prompted to enter **category, amount, month, and year**.  
+
+    ✅ **Benefit**: Stay in control of spending and avoid overspending by having clear monthly limits.
+
+    ---
+
+    #### 4️⃣ Show Budget
+    Easily check how well you are following your budgets.  
+    **Examples:**
+    - "Show food budget" → Category-specific budget  
+    - "Show budget" → Overall monthly budget  
+
+    ✅ **Benefit**: Instantly see progress, check remaining balance, and ensure you don’t cross the limits.
+
+    ---
+
+    #### 5️⃣ Set Goal
+    Plan your financial goals like saving for a vacation, laptop, or emergency fund.  
+    **Steps:**
+    1. Say "Set goal" to begin.  
+    2. Enter your **monthly income**.  
+    3. Provide your **goal name** (any name, e.g., "Vacation").  
+    4. Input **goal amount** and choose a **timeline** (6 months, 1 year, 2 years).  
+    5. The system will calculate:  
+       - Income - Expenses = Potential savings  
+       - "If you save RMX per month, you can achieve your goal in Y months"  
+       - "You should save at least RMZ per month to reach your goal in your chosen timeline"  
+
+    ✅ **Benefit**: Get realistic savings strategies, motivation, and achievable milestones.
+
+    ---
+
+    ### 📊 Sidebar Functions
+    The sidebar provides **visual dashboards** for quick insights:  
+    1. **Expenses Records** → Pie charts & bar graphs of spending by category and timeline.  
+    2. **Budgets Overview** → Progress bars showing how much of each budget has been used.  
+    3. **Financial Goals** → Visual savings progress toward each goal with time estimation.  
+
+    ✅ **Benefit**: A clearer, at-a-glance understanding of your financial health.
     
     ### Privacy:
     Your financial data is stored securely and is only accessible to you when logged in.
     """)
-
