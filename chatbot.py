@@ -1169,7 +1169,7 @@ def calculate_goal_feasibility(target_amount, target_date, user_email):
     spending = get_spending_by_category(user_email)
     monthly_spending = sum(spending.values()) if spending else 1000
     
-    days_until = (target_date - datetime.now().date()).days
+    days_until = (target_date.date() - datetime.now().date()).days
     months_until = max(1, days_until / 30.44)
     required_monthly = target_amount / months_until
     
@@ -3068,7 +3068,7 @@ def handle_new_goal_flow(user_input, user_email):
     2. Prompt for goal name
     3. Prompt for timeline
     4. Prompt for total needed amount
-    5. Calculate and respond as per A/B/C logic
+    5. Calculate and respond as per A/B/C logic, with explicit save confirmation
     """
     import re
     from datetime import datetime, timedelta
@@ -3079,11 +3079,14 @@ def handle_new_goal_flow(user_input, user_email):
 
     # 1. Ask for savings amount per month
     if stage == "ask_savings_per_month":
-        # Display confirmation + show income
         income = get_user_income(user_email)
         state["stage"] = "get_savings_per_month"
         state["income"] = income
-        return f"🎯 Would you like to set a savings goal?\n\n💰 **Your monthly income:** RM{income:.2f}\n\nHow much do you want to save per month? (e.g., RM300, RM500)"
+        return (
+            f"🎯 Would you like to set a savings goal?\n\n"
+            f"💰 **Your monthly income:** RM{income:.2f}\n\n"
+            "How much do you want to save per month? (e.g., RM300, RM500)"
+        )
 
     if stage == "get_savings_per_month":
         amount_match = re.search(r"(\d{1,6}(?:\.\d{1,2})?)", user_input.replace(',', ''))
@@ -3095,12 +3098,23 @@ def handle_new_goal_flow(user_input, user_email):
         return "🏷️ What's the name of your goal? (e.g., New Laptop, Vacation Fund)"
 
     if stage == "ask_goal_name":
-        state["goal_name"] = user_input.strip().title()
+    # Clean and title-case the goal name
+        new_goal_name = user_input.strip().title()
+    # Check for duplicates
+        existing_goals = get_user_goals(user_email)
+        duplicate = any(g['goal_name'].lower() == new_goal_name.lower() for g in existing_goals)
+        if duplicate:
+            return (
+                f"⚠️ Oops! You already have a goal named **'{new_goal_name}'**. \n\n"
+                "Each goal should have a unique name so I can track them for you. 😊\n\n"
+                "Please choose a different name for your new goal (e.g., add a number or emoji to make it special)!"
+            )
+    # If no duplicate, proceed as normal
+        state["goal_name"] = new_goal_name
         state["stage"] = "ask_timeline"
-        return "⏳ Choose your goal timeline: 6 months, 1 year, or 2 years."
+        return "⏳ What's the timeline for your goal? (e.g., 6 months, 1 year, or 2 years)"
 
     if stage == "ask_timeline":
-        # Accept 6 months, 1 year, 2 years, or custom
         m = re.search(r"(\d+)\s*(month|year)", user_input)
         if m:
             num = int(m.group(1))
@@ -3120,6 +3134,7 @@ def handle_new_goal_flow(user_input, user_email):
         state["stage"] = "ask_goal_amount"
         return "💰 How much do you need for your goal? (e.g., RM2400)"
 
+    # ---- KEY PART: Calculation + Save Confirmation ----
     if stage == "ask_goal_amount":
         amount_match = re.search(r"(\d{1,7}(?:\.\d{1,2})?)", user_input.replace(',', ''))
         if not amount_match:
@@ -3152,28 +3167,58 @@ def handle_new_goal_flow(user_input, user_email):
         state["required_monthly"] = required_monthly
         state["estimated_months"] = estimated_months
 
-        # Respond with logic (A/B/C)
+        # Always ask for confirmation to save, with summary
+        state["summary_msg"] = ""
         if net_savings >= required_monthly:
             # Case A: Achievable
-            st.session_state.goal_flow = None
-            return (
+            state["summary_msg"] = (
                 f"🎉 If you save **RM{required_monthly:.2f} per month**, you can achieve your \"{state['goal_name']}\" goal in {state['timeline_months']} months! 🚀\n"
-                f"Your net savings is **RM{net_savings:.2f}/month**."
+                f"💸 Your net savings is **RM{net_savings:.2f}/month**."
             )
         elif net_savings < required_monthly:
             # Case B: Not achievable, suggest extending
-            st.session_state.goal_flow = None
-            return (
+            state["summary_msg"] = (
                 f"⚠️ To achieve your goal in {state['timeline_months']} months, you need to save **RM{required_monthly:.2f}/month**.\n"
-                f"But your net savings is only **RM{net_savings:.2f}/month**.\n"
+                f"💸 But your net savings is only **RM{net_savings:.2f}/month**.\n"
                 "Consider extending your timeline or increasing monthly savings for a realistic plan! 😊"
             )
         elif net_savings > required_monthly:
             # Case C: Faster
-            st.session_state.goal_flow = None
-            return (
+            state["summary_msg"] = (
                 f"⚡ With your net savings of **RM{net_savings:.2f}/month**, you could achieve your RM{goal_amount:.2f} goal in just **{estimated_months} months** instead of {state['timeline_months']}! 🏆"
             )
+        state["stage"] = "save_goal_confirm"
+        return f"{state['summary_msg']}\n\n💾 **Do you want to save this goal?** (Type 'yes' to save, or 'no' to cancel)"
+
+    # ---- Handle explicit "yes/no" to save goal ----
+    if stage == "save_goal_confirm":
+        answer = user_input.strip().lower()
+        if answer in ["yes", "y", "save"]:
+            goal_name = state.get("goal_name", "Unnamed Goal")
+            months = state.get("timeline_months", 6)
+            target_amount = state.get("goal_amount", 0)
+            monthly_needed = target_amount / months if months else 0
+            target_date = (datetime.now() + timedelta(days=months*30)).strftime("%Y-%m-%d")
+            # Save to DB (calls your existing add_goal function)
+            add_goal(
+                user_email=user_email,
+                goal_name=goal_name,
+                goal_type="custom",
+                target_amount=target_amount,
+                target_date=target_date,
+                monthly_contribution=monthly_needed,
+                goal_details=None
+            )
+            st.session_state.goal_flow = None
+            return (
+                "🎉 **Your goal has been set successfully!**\n\n"
+                "✨ You may type **'Show my goal'** anytime to view your progress! 🚀"
+            )
+        elif answer in ["no", "n", "cancel"]:
+            st.session_state.goal_flow = None
+            return "No problem! Goal not saved. You can set a new goal anytime."
+        else:
+            return "Do you want to save this goal? (Type 'yes' to save, or 'no' to cancel)"
 
     # Fallback
     st.session_state.goal_flow = None
@@ -3187,6 +3232,153 @@ def process_user_input(input_text, user_email):
 
     input_text = input_text.strip()
     input_lower = input_text.lower()
+
+    # --- Add to Goal: Step 1 ---
+    add_to_goal_pattern = re.search(
+        r"add\s*rm?\s*(\d+(?:\.\d+)?)\s*to\s*(?:my\s*)?(.+?)(?:\s*goal)?$", input_lower)
+    if add_to_goal_pattern:
+        amount = float(add_to_goal_pattern.group(1))
+        goal_name = add_to_goal_pattern.group(2).strip()
+        goal = find_goal_by_name(user_email, goal_name)
+        if goal:
+            st.session_state.pending_goal_contribution = {
+                "goal_id": goal['id'],
+                "goal_name": goal['goal_name'],
+                "amount": amount
+            }
+            return (
+                f"💸 Did you want to add **RM{amount:.2f}** to your goal '**{goal['goal_name']}**'?\n"
+                f"(Type 'yes' to confirm, or say 'change' to update the amount or goal name.)"
+            )
+        else:
+            return f"😕 I couldn't find a goal named '{goal_name}'. Please check the goal name and try again."
+        
+    
+    if st.session_state.get("pending_goal_contribution") and st.session_state.get("awaiting_goal_change"):
+        user_text = input_text.strip().lower()
+        amount_match = re.search(r'rm?\s*(\d+(?:\.\d+)?)', user_text)
+        goal_match = re.search(r'to\s*(.+)$', user_text)
+        amount = None
+        goal_name = None
+        if amount_match:
+            amount = float(amount_match.group(1))
+        if goal_match:
+            goal_name = goal_match.group(1).replace('goal', '').strip()
+        if amount is None:
+            try:
+                amount = float(user_text)
+            except Exception:
+                pass
+        if amount is None and not goal_name:
+            goal_name = user_text.strip()
+        contrib = st.session_state.pending_goal_contribution
+        if amount:
+            contrib['amount'] = amount
+        if goal_name:
+            goal = find_goal_by_name(user_email, goal_name)
+            if goal:
+                contrib['goal_id'] = goal['id']
+                contrib['goal_name'] = goal['goal_name']
+            else:
+                return f"😕 I couldn't find a goal named '{goal_name}'. Please check the goal name and try again."
+        del st.session_state['awaiting_goal_change']
+        return (
+            f"💸 Did you want to add **RM{contrib['amount']:.2f}** to your goal '**{contrib['goal_name']}**'?\n"
+            f"(Type 'yes' to confirm, or say 'change' to update the amount or goal name.)"
+        )
+    
+    # --- Add to Goal: Step 2 (Confirmation) ---
+    if st.session_state.get("pending_goal_contribution"):
+        contrib = st.session_state.pending_goal_contribution
+        input_confirm = input_lower.strip()
+        if input_confirm in ["yes", "y", "confirm", "ok"]:
+        # Add contribution
+            success = add_goal_contribution(contrib["goal_id"], user_email, contrib["amount"], "Chatbot quick add")
+            goal = find_goal_by_name(user_email, contrib["goal_name"])
+            progress = get_enhanced_goal_progress(goal)
+            bar = "█" * int(progress['progress_percent'] // 10) + "░" * (10 - int(progress['progress_percent'] // 10))
+            st.session_state.pending_goal_contribution = None
+            return (
+                f"🎉 Yay! RM{contrib['amount']:.2f} has been added to your **{contrib['goal_name']}** goal!\n"
+                f"Here’s your latest progress:\n"
+                f"• Target: RM{goal['target_amount']:.2f}\n"
+                f"• Saved: RM{goal['current_amount']:.2f}\n"
+                f"• Progress: {bar} {progress['progress_percent']:.1f}%\n"
+                f"{progress['status_msg']}\n"
+                f"✨ Keep it up! Want to add more or check another goal? Type 'show my goal' anytime!"
+            )
+        elif input_confirm in ["no", "n", "change", "edit"]:
+            st.session_state['awaiting_goal_change'] = True  # <-- set a flag
+            return (
+                "🔄 No problem! What would you like to change?\n\n"
+                "• Type the **new amount** (e.g., 'RM100' or '100')\n"
+                "• Or type the **new goal name** (e.g., 'New Laptop 2')\n"
+                "• Or type both, e.g., 'RM200 to New Laptop 2'\n\n"
+                "What would you like to update?"
+            )
+        else:
+            return (
+                f"💸 Did you want to add **RM{contrib['amount']:.2f}** to your goal '**{contrib['goal_name']}**'?\n"
+                f"(Type 'yes' to confirm, or say 'change' to update the amount or goal name.)"
+            )
+        
+    # Handle awaiting goal change input (after user says "change")
+
+
+    set_goal_triggers = [
+        "set a goal", "set goals", "set goal", "create goal", "new goal", "add goal", "make a goal",
+        "want to set goal", "i want to set goal", "i want to create goal", "start a goal",
+        "i want to start a goal", "i want to create a goal"
+    ]
+    if any(trigger in input_lower for trigger in set_goal_triggers):
+    # 🟡 Check if user has set income
+        if not has_income_set(user_email):
+            st.session_state["pending_income_setting"] = True
+            return (
+                "💡 **Before we can set a goal, let's record your monthly income!**\n\n"
+                "😊 This helps me give you smarter, more realistic savings advice.\n\n"
+                "👉 _Please type your monthly income, e.g._\n"
+                "`My income is RM4000` or `Set my income to RM5000`"
+            )
+    # If income IS set, continue as normal
+        st.session_state["goal_flow"] = {"stage": "ask_savings_per_month"}
+        return handle_new_goal_flow("", user_email)
+
+        # --- UNIVERSAL ESCAPE COMMANDS ---
+    escape_commands = [
+        "show my expenses", "show expenses", "view expenses", "my expenses",
+        "show my budget", "view my budget", "show my income", "help", "logout", "exit", "cancel"
+    ]
+    if any(cmd in input_lower for cmd in escape_commands):
+        # Clear ALL multi-step flows
+        for key in [
+            "goal_flow", "goal_conversation", "goal_creation_stage", "pending_multiple_expenses",
+            "pending_expense", "correction_stage", "budget_conversation", "pending_income_setting", "pending_income_confirm"
+        ]:
+            if key in st.session_state:
+                st.session_state[key] = None
+
+        # Now handle the input FRESH (no recursion!)
+        if "expenses" in input_lower:
+            return show_daily_expenses(user_email)
+        if "budget" in input_lower:
+            return show_budget_status(user_email)
+        if "income" in input_lower:
+            return get_income_response(user_email)
+        if "help" in input_lower:
+            return (
+                "💡 I can help you track expenses, set budgets, create goals, view your spending, and more!\n"
+                "Try: 'I spent RM10 on lunch', 'set a budget', 'show my expenses', or 'set a goal'.\n"
+                "Type 'cancel' anytime to exit a flow."
+            )
+        if "logout" in input_lower or "exit" in input_lower:
+            st.session_state.authenticated = False
+            st.session_state.current_user = None
+            st.session_state.messages = []
+            return "You've been logged out. See you next time!"
+        if "cancel" in input_lower:
+            return "All flows cancelled. What would you like to do next?"
+        return "Flow cancelled. What would you like to do next?"
 
             # --- NEW GOAL FLOW HANDLER: HIGH PRIORITY ---
     if st.session_state.get("goal_flow"):
@@ -3250,19 +3442,28 @@ def process_user_input(input_text, user_email):
     if st.session_state.get("pending_income_confirm"):
         if input_lower in ["yes", "y", "confirm", "ok"]:
             new_income = st.session_state["pending_income_amount"]
-            set_user_income(user_email, new_income)
-            # Reset pending states
+            success = set_user_income(user_email, new_income)
             st.session_state["pending_income_confirm"] = False
             st.session_state["pending_income_amount"] = None
-            return ("Alright, Your income have been saved successfully recorded! "
-                    "You may type 'show my income' to view, 'update income' to update new income or 'create goals' "
-                    "to have a good planning financial goals!")
+            if success:
+            # 🎉 Friendly confirmation and continue to goal setup
+                st.session_state["goal_flow"] = {"stage": "ask_savings_per_month"}
+                return (
+                    "🎉 **Awesome! Your income of RM{:.2f} has been recorded successfully!**\n\n"
+                "Now, let's set your savings goal. Ready? 🚀\n\n".format(new_income)
+                + handle_new_goal_flow("", user_email)
+                )
+            else:
+                return (
+                    "❌ Oops, something went wrong saving your income. Please try again.\n"
+                    "Type your monthly income again, e.g., 'My income is RM4000'."
+                )
         elif input_lower in ["no", "n"]:
             st.session_state["pending_income_confirm"] = False
             st.session_state["pending_income_setting"] = True
-            return "Sure, now how much of your income? Just give a new amount"
+            return "No worries! 😊 Please enter your correct monthly income."
         else:
-            return "Please type 'yes' to confirm or 'no' to edit the amount."
+            return "Please type 'yes' to confirm your income, or 'no' to change it."
 
     # --- INCOME SETTING TRIGGER (no income yet) ---
 
@@ -3339,38 +3540,57 @@ def process_user_input(input_text, user_email):
         "goals progress", "goal status", "goals status", "goal summary", "goals summary",
         "see goal", "see goals", "goal overview", "goals overview",
         "all goal", "all goals", "check goal progress", "check goals progress",
-        "how's my saving", "savings progress"
+        "how's my saving", "savings progress", "show my goal", "view my goal", "check my goal"
     ]
 
     if any(input_lower.startswith(pat) or input_lower == pat for pat in goal_query_patterns):
         goals = get_user_goals(user_email)
-        print("DEBUG: goals returned for user:", goals)  # Add this for debugging
-    
         if not goals:
+            st.session_state.waiting_for_goal_creation_confirm = True
             return (
-                "🎯 **You don't have any goals yet!**\n\n"
-                "Setting financial goals is one of the biggest predictors of success.\n\n"
-                "Would you like to set a goal? Just say **'set a goal'** to get started.\n\n"
-                "Popular ideas:\n- Save for a vacation 🌴\n- Emergency fund 💰\n- Buy a car 🚗\n- Buy a house 🏠\n- Education 🎓\n"
+                "🎯 **You don't have any financial goals yet!**\n\n"
+                "Would you like to set a savings goal now? 😊\n\n"
+                "Just type **'yes'** to get started, or **'no'** to skip for now."
             )
         else:
-        # User has goals - show them properly
-            resp = "🎯 **Your Financial Goals & Progress:**\n\n"
+            resp = "🎯 **Here are your financial goals:**\n\n"
             for goal in goals:
                 progress = get_enhanced_goal_progress(goal)
+                emoji = "🎯"
+                name = goal.get("goal_name", "")
+                if "car" in name.lower(): emoji = "🚗"
+                elif "house" in name.lower(): emoji = "🏠"
+                elif "vacation" in name.lower() or "travel" in name.lower(): emoji = "🏖️"
+                elif "emergency" in name.lower(): emoji = "💰"
+                elif "education" in name.lower(): emoji = "🎓"
+                bar = "█" * int(progress['progress_percent'] // 10) + "░" * (10 - int(progress['progress_percent'] // 10))
                 resp += (
-                    f"**{goal['goal_name']}**\n"
-                    f"├ Target: RM{goal['target_amount']:.2f}\n"
-                    f"├ Saved: RM{goal['current_amount']:.2f} ({progress['progress_percent']:.1f}%)\n"
-                    f"├ Remaining: RM{progress['remaining_amount']:.2f}\n"
-                    f"├ Status: {progress['status']}\n"
-                    f"├ Days left: {progress['days_remaining']}\n"
-                    f"├ Monthly needed: RM{progress['weekly_target']*4:.2f} (weekly: RM{progress['weekly_target']:.2f})\n"
-                    f"└ {progress['status_msg']}\n\n"
+                    f"{emoji} **{goal['goal_name']}**\n"
+                    f"   • Timeline: {goal.get('target_date', 'N/A')}\n"
+                    f"   • Progress: {bar} {progress['progress_percent']:.1f}%\n"
+                    f"   • Saved: RM{goal['current_amount']:.2f} / RM{goal['target_amount']:.2f}\n\n"
                 )
             resp += "✨ Want to add money to a goal? Just say 'add RMxxx to my [goal name]'.\n"
-            resp += "🏆 Want to set a new goal? Say 'set a goal'."
+            resp += "🏆 Want to add another goal? Say 'set a goal'."
             return resp
+        
+    if st.session_state.get("waiting_for_goal_creation_confirm"):
+        if input_lower in ["yes", "y"]:
+            st.session_state.waiting_for_goal_creation_confirm = False
+            if not has_income_set(user_email):
+                st.session_state["goal_flow"] = {"stage": "ask_savings_per_month"}
+                income = get_user_income(user_email)
+                return (
+                    "🎯 Would you like to set a savings goal?\n\n"
+                    f"💰 **Your monthly income:** RM{income:.2f}\n\n"
+                    "How much do you want to save per month? (e.g., RM300, RM500)"
+                )
+            else:
+                st.session_state["goal_flow"] = {"stage": "ask_savings_per_month"}
+                return handle_new_goal_flow("", user_email)
+        elif input_lower in ["no", "n"]:
+            st.session_state.waiting_for_goal_creation_confirm = False
+            return "No problem! Let me know when you're ready to set a goal. 😊"
 
     # Goal creation flow (already in your code, just ensure it’s only triggered by set/create/add goal, not show)
     goal_commands = ["set a goal", "set goals", "set goal", "create goal", "new goal", "add goal", "make a goal"]
