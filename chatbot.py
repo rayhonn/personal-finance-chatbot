@@ -20,7 +20,7 @@ st.markdown("""
 <style>
     /* Button styling */
     .stButton > button {
-        height: 60px;
+        height: 40px;
         font-size: 16px;
         font-weight: bold;
         border-radius: 10px;
@@ -5237,7 +5237,7 @@ elif page == "Home":
         ### 🔍 Main Features:
         
         **1️⃣ Track Expenses**
-        - Add spending by saying: *"I spent RM25.50 on lunch"*
+        - Add expenses by saying: *"I spent RM25.50 on lunch"*
         - Add multiple expenses: *"RM15 for movie and RM10 for lunch"*
         - View expenses: *"Show my expenses this week"*
         

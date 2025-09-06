@@ -205,14 +205,11 @@ def parse_day_from_input(input_text):
         day_name = this_day_match.group(1)
         for key, day_index in days_of_week.items():
             if day_name in key or key in day_name:  # Flexible matching
-                # Calculate days until the next occurrence
-                current_weekday = today.weekday()
-                days_until = (day_index - current_weekday) % 7
-                if days_until == 0:  # Today is the requested day
-                    return (today, f"This {key.title()}")
-                else:
-                    date = today + timedelta(days=days_until)
-                    return (date, f"This {key.title()}")
+                # Get the start of the current week (Monday)
+                start_of_week = today - timedelta(days=today.weekday())
+                # Calculate the date for the requested day in this week
+                date = start_of_week + timedelta(days=day_index)
+                return (date, f"This {key.title()}")
     
     # Check for "last [day]" or "previous [day]" pattern
     last_day_match = re.search(r'(last|previous) (mon|tue|wed|thu|fri|sat|sun|monday|tuesday|wednesday|thursday|friday|saturday|sunday)', input_lower)
@@ -220,24 +217,32 @@ def parse_day_from_input(input_text):
         day_name = last_day_match.group(2)
         for key, day_index in days_of_week.items():
             if day_name in key or key in day_name:  # Flexible matching
-                # Calculate days since the last occurrence
-                current_weekday = today.weekday()
-                days_since = (current_weekday - day_index) % 7
-                if days_since == 0:  # Today is the requested day
-                    days_since = 7  # Go back a full week
-                date = today - timedelta(days=days_since)
+                # Get the start of the previous week (last Monday)
+                start_of_last_week = today - timedelta(days=today.weekday() + 7)
+                # Calculate the date for the requested day in the previous week
+                date = start_of_last_week + timedelta(days=day_index)
                 return (date, f"Last {key.title()}")
     
     # If just a day name without this/last qualifier, default to last occurrence
     for day_name, day_index in days_of_week.items():
         if day_name in input_lower:
-            # Calculate days difference to previous occurrence
+            # Determine if the day is in the current week or already passed
             current_weekday = today.weekday()
-            days_diff = (current_weekday - day_index) % 7
-            if days_diff == 0:
-                days_diff = 7  # If today is the day, go back to previous week
-            date = today - timedelta(days=days_diff)
-            return (date, f"Last {day_name.title()}")
+            
+            # Get the start of the current week (Monday)
+            start_of_week = today - timedelta(days=current_weekday)
+            
+            # Calculate date for the requested day in this week
+            this_week_date = start_of_week + timedelta(days=day_index)
+            
+            # If the day has already passed this week, return "Last [day]"
+            # Otherwise return "This [day]"
+            if this_week_date <= today:
+                return (this_week_date, f"This {day_name.title()}")
+            else:
+                # Get the day from previous week
+                last_week_date = this_week_date - timedelta(days=7)
+                return (last_week_date, f"Last {day_name.title()}")
     
     # Default to today
     return (today, "Today")
@@ -318,19 +323,30 @@ def show_specific_month_expenses(user_email, input_text, DB_PATH):
         percentage = (total / monthly_total) * 100
         response += f"• {category.title()}: RM{total:.2f} ({percentage:.1f}%)\n\n"
     
-    response += "\n"
-    
-    # Show daily totals (top 10 spending days)
-    response += "📊 **Daily Spending:**\n\n"
-    recent_days = sorted(daily_totals.items(), key=lambda x: x[1], reverse=True)[:10]
-    for date, total in recent_days:
+    # Show daily totals in chronological order
+    response += "📅 **Daily Spending (Chronological):**\n\n"
+    # Sort by date (chronologically)
+    sorted_days = sorted(daily_totals.items())
+    for date, total in sorted_days:
         try:
             date_obj = datetime.strptime(date, "%Y-%m-%d")
             formatted_date = date_obj.strftime("%a, %b %d")
             response += f"• {formatted_date}: RM{total:.2f}\n\n"
         except:
             response += f"• {date}: RM{total:.2f}\n\n"
-
+    
+    # Add a section to show top spending days too
+    response += "💸 **Top Spending Days:**\n\n"
+    # Sort by amount (highest to lowest)
+    top_days = sorted(daily_totals.items(), key=lambda x: x[1], reverse=True)[:5]
+    for date, total in top_days:
+        try:
+            date_obj = datetime.strptime(date, "%Y-%m-%d")
+            formatted_date = date_obj.strftime("%a, %b %d")
+            response += f"• {formatted_date}: RM{total:.2f}\n\n"
+        except:
+            response += f"• {date}: RM{total:.2f}\n\n"
+    
     response += "\n"
     response += "**👆 Viewing Options:**\n"
     response += "\n• 'Show **[month e.g. aug, september]** expenses' - View specific month\n\n"
@@ -415,14 +431,6 @@ def show_specific_week_expenses(user_email, input_text, DB_PATH):
             "description": description,
             "category": category
         })
-    
-    # Show category breakdown
-    response += "💰 **Category Breakdown:**\n\n"
-    for category, total in sorted(category_totals.items(), key=lambda x: x[1], reverse=True):
-        percentage = (total / weekly_total) * 100
-        response += f"• {category.title()}: RM{total:.2f} ({percentage:.1f}%)\n\n"
-    
-    response += "\n"
     
     # Show daily breakdown (all days in the week)
     response += "📊 **Daily Breakdown:**\n\n"
@@ -532,54 +540,11 @@ def show_specific_day_expenses(user_email, input_text, DB_PATH):
         response += f"• RM{amount:.2f} for **{description}** ({category.title()})\n\n"
     
     response += "\n\n"
-    
-    # Add category summary if multiple categories
-    if len(category_totals) > 1:
-        response += "💰 **Category Breakdown:**\n\n"
-        for category, total in sorted(category_totals.items(), key=lambda x: x[1], reverse=True):
-            percentage = (total / daily_total) * 100
-            response += f"• {category.title()}: RM{total:.2f} ({percentage:.1f}%)\n\n"
-        response += "\n\n"
-    
-    # Add weekly context if there are other days with expenses
-    if len(week_context) > len(daily_expenses):
-        response += "📊 **7-Day Context:**\n\n"
-        
-        # Group by date
-        week_by_date = {}
-        week_total = 0
-        
-        for expense in week_context:
-            exp_date = expense[1]
-            amount = float(expense[0])
-            week_total += amount
-            
-            if exp_date not in week_by_date:
-                week_by_date[exp_date] = 0
-            week_by_date[exp_date] += amount
-        
-        # Sort dates and show 7-day context with line breaks
-        sorted_dates = sorted(week_by_date.items(), reverse=True)
-        for exp_date, daily_total in sorted_dates:
-            try:
-                date_obj = datetime.strptime(exp_date, "%Y-%m-%d")
-                formatted_date = date_obj.strftime("%a, %b %d")
-                
-                # Highlight the selected day
-                if exp_date == date_str:
-                    response += f"• **{formatted_date}: RM{daily_total:.2f} ← {day_description}**\n\n"
-                else:
-                    response += f"• {formatted_date}: RM{daily_total:.2f}\n\n"
-            except:
-                response += f"• {exp_date}: RM{daily_total:.2f}\n\n"
-
-        response += f"\n**7-Day Total: RM{week_total:.2f}**\n\n"
-    
-        response += "**👆 Viewing Options:**\n"
-        response += "\n• 'Show **[month e.g. aug, september]** expenses' - View specific month\n\n"
-        response += "• 'Show **[week e.g. this week, last week]** expenses' - View weekly expenses\n\n"
-        response += "• 'Show **[day e.g. today, yesterday, mon-sun]** expenses' - View specific day spending\n\n"
-        response += "  Note: Please use 'this' or 'last' with days of week (mon-sun) for clarity\n"
+    response += "**👆 Viewing Options:**\n"
+    response += "\n• 'Show **[month e.g. aug, september]** expenses' - View specific month\n\n"
+    response += "• 'Show **[week e.g. this week, last week]** expenses' - View weekly expenses\n\n"
+    response += "• 'Show **[day e.g. today, yesterday, mon-sun]** expenses' - View specific day spending\n\n"
+    response += "  Note: Please use 'this' or 'last' with days of week (mon-sun) for clarity\n"
     
     return response
 
@@ -615,6 +580,11 @@ def detect_expense_view_type(input_text):
                      "july", "august", "september", "october", "november", "december",
                      "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec"]
     
+    # Check for month view
+    for keyword in month_keywords:
+        if keyword in input_lower:
+            return "month"
+        
     # Check for day view
     for keyword in day_keywords:
         if keyword in input_lower:
@@ -624,11 +594,6 @@ def detect_expense_view_type(input_text):
     for keyword in week_keywords:
         if keyword in input_lower:
             return "week"
-    
-    # Check for month view
-    for keyword in month_keywords:
-        if keyword in input_lower:
-            return "month"
     
     # If "show expenses" but no time specification, default to month view
     if "show expenses" in input_lower or "view expenses" in input_lower:
