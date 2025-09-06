@@ -323,30 +323,6 @@ def show_specific_month_expenses(user_email, input_text, DB_PATH):
         percentage = (total / monthly_total) * 100
         response += f"• {category.title()}: RM{total:.2f} ({percentage:.1f}%)\n\n"
     
-    # Show daily totals in chronological order
-    response += "📅 **Daily Spending (Chronological):**\n\n"
-    # Sort by date (chronologically)
-    sorted_days = sorted(daily_totals.items())
-    for date, total in sorted_days:
-        try:
-            date_obj = datetime.strptime(date, "%Y-%m-%d")
-            formatted_date = date_obj.strftime("%a, %b %d")
-            response += f"• {formatted_date}: RM{total:.2f}\n\n"
-        except:
-            response += f"• {date}: RM{total:.2f}\n\n"
-    
-    # Add a section to show top spending days too
-    response += "💸 **Top Spending Days:**\n\n"
-    # Sort by amount (highest to lowest)
-    top_days = sorted(daily_totals.items(), key=lambda x: x[1], reverse=True)[:5]
-    for date, total in top_days:
-        try:
-            date_obj = datetime.strptime(date, "%Y-%m-%d")
-            formatted_date = date_obj.strftime("%a, %b %d")
-            response += f"• {formatted_date}: RM{total:.2f}\n\n"
-        except:
-            response += f"• {date}: RM{total:.2f}\n\n"
-    
     response += "\n"
     response += "**👆 Viewing Options:**\n"
     response += "\n• 'Show **[month e.g. aug, september]** expenses' - View specific month\n\n"

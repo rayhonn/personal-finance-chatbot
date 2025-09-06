@@ -1805,8 +1805,16 @@ def extract_budget_entities(text):
         r"allocate.*?(\$?[\d,.]+)\s*(?:rm)?\s*for (.+?)(?: for (january|february|march|april|may|june|july|august|september|october|november|december))?(?: (\d{4}))?",
         r"(\$?[\d,.]+)\s*(?:rm)?\s*for (.+?)(?: budget)(?: for (january|february|march|april|may|june|july|august|september|october|november|december))?(?: (\d{4}))?",
         r"rm\s*(\d+\.?\d*)\s*for (.+?)(?: for (january|february|march|april|may|june|july|august|september|october|november|december))?(?: (\d{4}))?",
-        r"set.*?(\w+)\s*budget",  # New pattern: "set transportation budget"
-        r"budget.*?for (\w+)",    # New pattern: "budget for transportation"
+        r"set.*?(\w+)\s*budget",  # Pattern: "set transportation budget"
+        r"create.*?(\w+)\s*budget",  # Pattern: "create food budget"
+        r"make.*?(\w+)\s*budget",  # Pattern: "make transportation budget" 
+        r"budget.*?for (\w+)",    # Pattern: "budget for transportation"
+        r"(\w+)\s*budget.*?setup",  # Pattern: "food budget setup"
+        r"my\s*(\w+)\s*budget",   # Pattern: "my food budget"
+        r"set\s+a\s*(\w+)\s*budget",
+        r"set\s+a\s*budget\s+for\s+(\w+)",
+        r"(?:i\s+)?want\s+(?:to\s+)?set\s+a\s+budget\s+for\s+(\w+)",  # Pattern: "I want set a budget for food"
+        r"(?:i\s+)?need\s+(?:to\s+)?set\s+a\s+budget\s+for\s+(\w+)"   # Pattern: "I need to set a budget for food"
     ]
     
     for pattern in budget_patterns:
@@ -2089,12 +2097,32 @@ def show_specific_budget(user_email, category):
         # Category budget doesn't exist - offer to create it
         response = f"💡 **{category.title()} Budget for {current_month} {current_year}**\n\n"
         response += f"You haven't set a {category.lower()} budget yet! 📊\n\n"
+        
+        # Get current spending in this category to provide context
+        spending = get_spending_by_category(user_email, current_month, current_year)
+        spent = spending.get(category.lower(), 0)
+        
+        if spent > 0:
+            response += f"💰 **Your current {category.lower()} spending this month:** RM{spent:.2f}\n\n"
+            response += f"Setting a budget would help you control this spending!\n\n"
+        
         response += f"🎯 **Want to set your {category.lower()} budget?**\n\n"
         response += f"Setting a {category.lower()} budget will help you:\n\n"
         response += f"• Track your {category.lower()} spending\n\n"
         response += f"• Stay within your financial limits\n\n"
         response += f"• Build better spending habits\n\n"
         response += f"• Reach your financial goals faster\n\n"
+        
+        # Provide category-specific tips
+        if category.lower() == "food":
+            response += f"**Quick Tip:** Most financial experts recommend spending 10-15% of your income on food. 🍽️\n\n"
+        elif category.lower() == "transport":
+            response += f"**Quick Tip:** Transportation costs typically take up 10-15% of a monthly budget. 🚗\n\n"
+        elif category.lower() == "entertainment":
+            response += f"**Quick Tip:** Consider allocating 5-10% of your budget for entertainment expenses. 🎬\n\n"
+        elif category.lower() == "housing":
+            response += f"**Quick Tip:** Housing costs should ideally be under 30% of your monthly income. 🏠\n\n"
+        
         response += f"💰 **Ready to get started?** \n\nJust say 'set {category.lower()} budget' and I'll walk you through it!\n\n"
         response += f"Or say 'set budget' to choose from all categories. What sounds good? 😊"
         return response
@@ -2154,7 +2182,7 @@ def show_specific_budget(user_email, category):
         response += f"• You have plenty of room left in your {category.lower()} budget\n\n"
 
     response += "🔧 **Want to make changes?**\n\n"
-    response += f"• Say 'set {category.lower()} budget' to update this budget\n"
+    response += f"• Say 'set {category.lower()} budget' to update this budget\n\n"
     response += "• Say 'show budget' to see all your budgets\n"
     
     return response
@@ -2783,7 +2811,7 @@ def debug_intent_classification(input_text):
         "set goal", "create goal", "new goal", "add goal", "save for", "saving goal",
         "want to save", "financial goal", "savings target", "set savings goal",
         "i want to save for", "help me save", "saving plan", "set target",
-        "create savings goal", "make a goal", "i want to set goal", "want to set goal"
+        "create savings goal", "make a goal", "i want to set goal", "want to set goal", "i want to a set goal"
     ]
     
     goal_query_indicators = [
@@ -2816,6 +2844,11 @@ def debug_intent_classification(input_text):
         "set budget", "create budget", "make budget", "establish budget", "new budget",
         "setup budget", "allocate budget", "limit", "want to", "help me", "i need to"
     ]
+    
+    # Check for category-specific budget patterns
+    category_budget_match = re.search(r'(?:set|create|make|setup)\s+(?:my|a|an)?\s*(\w+)\s+budget', input_lower)
+    if category_budget_match:
+        return "budget_set", 0.95  # High confidence for direct category budget commands
     
     has_query_indicator = any(indicator in input_lower for indicator in budget_query_indicators)
     has_set_indicator = any(indicator in input_lower for indicator in budget_set_indicators)
@@ -2913,11 +2946,31 @@ def get_category_from_input(text):
 
 def get_month_from_input(text):
     """Extract month name from text or default to current"""
-    months = ["january","february","march","april","may","june","july","august","september","october","november","december"]
+    # Map of full month names and their common abbreviations
+    month_mapping = {
+        "january": ["jan", "january"],
+        "february": ["feb", "february"],
+        "march": ["mar", "march"],
+        "april": ["apr", "april"],
+        "may": ["may"],
+        "june": ["jun", "june"],
+        "july": ["jul", "july"],
+        "august": ["aug", "august"],
+        "september": ["sep", "sept", "september"],
+        "october": ["oct", "october"],
+        "november": ["nov", "november"],
+        "december": ["dec", "december"]
+    }
+    
     text = text.lower()
-    for m in months:
-        if m in text:
-            return m.title()
+    
+    # Check for month names or abbreviations in the text
+    for month_name, abbreviations in month_mapping.items():
+        for abbr in abbreviations:
+            # Check for exact word match using word boundaries
+            if re.search(r'\b' + abbr + r'\b', text):
+                return month_name.title()
+    
     return datetime.now().strftime("%B")
 
 def get_year_from_input(text):
@@ -2978,8 +3031,12 @@ def process_budget_conversation(input_text, user_email):
     # Ask for year
     if stage == "ask_year":
         year = get_year_from_input(input_text)
-        if not year or year < 2020 or year > 2100:
-            return "Please enter a year between 2020 and 2100 (e.g. 2025)."
+        current_year = datetime.now().year
+        valid_years = list(range(current_year-2, current_year+3))  # Allow 2 years back and 2 years forward
+        
+        if not year or year not in valid_years:
+            return f"Please enter a reasonable year (between {current_year-2} and {current_year+2}). Typically, you'd want to set a budget for the current year ({current_year}) or next year ({current_year+1})."
+        
         conv["year"] = year
         conv["stage"] = "confirm"
         return (f"Please confirm: Budget **RM{conv['amount']:.2f}** for **{conv['category'].title()}** in **{conv['month']} {year}**.\n"
@@ -3051,8 +3108,12 @@ def process_budget_conversation(input_text, user_email):
 
     if stage == "revise_year":
         year = get_year_from_input(input_text)
-        if not year or year < 2020 or year > 2100:
-            return "Please enter a valid year, e.g. 2025."
+        current_year = datetime.now().year
+        valid_years = list(range(current_year-2, current_year+3))  # Allow 2 years back and 2 years forward
+        
+        if not year or year not in valid_years:
+            return f"Please enter a reasonable year (between {current_year-2} and {current_year+2}). Typically, you'd want to set a budget for the current year ({current_year}) or next year ({current_year+1})."
+        
         conv["year"] = year
         conv["stage"] = "confirm"
         return (f"Updated! Please confirm: Budget **RM{conv['amount']:.2f}** for **{conv['category'].title()}** in **{conv['month']} {year}**.\n\n"
@@ -3172,14 +3233,14 @@ def handle_new_goal_flow(user_input, user_email):
         if net_savings >= required_monthly:
             # Case A: Achievable
             state["summary_msg"] = (
-                f"🎉 If you save **RM{required_monthly:.2f} per month**, you can achieve your \"{state['goal_name']}\" goal in {state['timeline_months']} months! 🚀\n"
+                f"🎉 If you save **RM{required_monthly:.2f} per month**, you can achieve your \"{state['goal_name']}\" goal in {state['timeline_months']} months! 🚀\n\n"
                 f"💸 Your net savings is **RM{net_savings:.2f}/month**."
             )
         elif net_savings < required_monthly:
             # Case B: Not achievable, suggest extending
             state["summary_msg"] = (
-                f"⚠️ To achieve your goal in {state['timeline_months']} months, you need to save **RM{required_monthly:.2f}/month**.\n"
-                f"💸 But your net savings is only **RM{net_savings:.2f}/month**.\n"
+                f"⚠️ To achieve your goal in {state['timeline_months']} months, you need to save **RM{required_monthly:.2f}/month**.\n\n"
+                f"💸 But your net savings is only **RM{net_savings:.2f}/month**.\n\n"
                 "Consider extending your timeline or increasing monthly savings for a realistic plan! 😊"
             )
         elif net_savings > required_monthly:
@@ -3299,12 +3360,12 @@ def process_user_input(input_text, user_email):
             bar = "█" * int(progress['progress_percent'] // 10) + "░" * (10 - int(progress['progress_percent'] // 10))
             st.session_state.pending_goal_contribution = None
             return (
-                f"🎉 Yay! RM{contrib['amount']:.2f} has been added to your **{contrib['goal_name']}** goal!\n"
-                f"Here’s your latest progress:\n"
-                f"• Target: RM{goal['target_amount']:.2f}\n"
-                f"• Saved: RM{goal['current_amount']:.2f}\n"
-                f"• Progress: {bar} {progress['progress_percent']:.1f}%\n"
-                f"{progress['status_msg']}\n"
+                f"🎉 Yay! RM{contrib['amount']:.2f} has been added to your **{contrib['goal_name']}** goal!\n\n"
+                f"Here’s your latest progress:\n\n"
+                f"• Target: RM{goal['target_amount']:.2f}\n\n"
+                f"• Saved: RM{goal['current_amount']:.2f}\n\n"
+                f"• Progress: {bar} {progress['progress_percent']:.1f}%\n\n"
+                f"{progress['status_msg']}\n\n"
                 f"✨ Keep it up! Want to add more or check another goal? Type 'show my goal' anytime!"
             )
         elif input_confirm in ["no", "n", "change", "edit"]:
@@ -3318,7 +3379,7 @@ def process_user_input(input_text, user_email):
             )
         else:
             return (
-                f"💸 Did you want to add **RM{contrib['amount']:.2f}** to your goal '**{contrib['goal_name']}**'?\n"
+                f"💸 Did you want to add **RM{contrib['amount']:.2f}** to your goal '**{contrib['goal_name']}**'?\n\n"
                 f"(Type 'yes' to confirm, or say 'change' to update the amount or goal name.)"
             )
         
@@ -3422,9 +3483,9 @@ def process_user_input(input_text, user_email):
         current_income = get_user_income(user_email)
         return (
             f"💡 You already have an income set. Your income is **RM{current_income:.2f}**.\n\n"
-            "If you want to update, just type **'update income'**.\n"
-            "To view your income, type **'show my income'**.\n"
-            "Or, create goals for your financial planning by saying **'create goals'**!\n"
+            "If you want to update, just type **'update income'**.\n\n"
+            "To view your income, type **'show my income'**.\n\n"
+            "Or, create goals for your financial planning by saying **'create goals'**!\n\n"
         )
 
         # --- PENDING INCOME SETTING FLOW ---
@@ -3455,7 +3516,7 @@ def process_user_input(input_text, user_email):
                 )
             else:
                 return (
-                    "❌ Oops, something went wrong saving your income. Please try again.\n"
+                    "❌ Oops, something went wrong saving your income. Please try again.\n\n"
                     "Type your monthly income again, e.g., 'My income is RM4000'."
                 )
         elif input_lower in ["no", "n"]:
@@ -3566,11 +3627,11 @@ def process_user_input(input_text, user_email):
                 bar = "█" * int(progress['progress_percent'] // 10) + "░" * (10 - int(progress['progress_percent'] // 10))
                 resp += (
                     f"{emoji} **{goal['goal_name']}**\n"
-                    f"   • Timeline: {goal.get('target_date', 'N/A')}\n"
-                    f"   • Progress: {bar} {progress['progress_percent']:.1f}%\n"
+                    f"   • Timeline: {goal.get('target_date', 'N/A')}\n\n"
+                    f"   • Progress: {bar} {progress['progress_percent']:.1f}%\n\n"
                     f"   • Saved: RM{goal['current_amount']:.2f} / RM{goal['target_amount']:.2f}\n\n"
                 )
-            resp += "✨ Want to add money to a goal? Just say 'add RMxxx to my [goal name]'.\n"
+            resp += "✨ Want to add money to a goal? Just say 'add RMxxx to my [goal name]'.\n\n"
             resp += "🏆 Want to add another goal? Say 'set a goal'."
             return resp
         
@@ -3598,7 +3659,7 @@ def process_user_input(input_text, user_email):
         st.session_state.goal_creation_stage = "get_goal_name"
         return (
             "🎯 Let's create your financial goal!\n\n"
-            "Can you provide your goal name and timeline?\n"
+            "Can you provide your goal name and timeline?\n\n"
             "_(e.g., 'Buy a car in 1 year', 'Family vacation in 2 years', 'Wedding in 18 months')_"
         )
 
@@ -4466,14 +4527,68 @@ def process_user_input(input_text, user_email):
             
         return "Hey there! 😊 I don't see any goals set up yet, but that's totally fine - we all start somewhere!\n\n🎯 **Ready to turn your dreams into plans?** Setting financial goals is like having a roadmap to your future!\n\nI can help you save for anything:\n• 🚗 **Buy New Car** - get that reliable ride you deserve!\n• 🏠 **Buy New House** - your dream home awaits!\n• ✈️ **Go To Travel** - explore the world and create memories!\n\nJust say **'what goals you want to plan?'** and let's make your dreams happen! What do you say? ✨"
     
-    # Handle BUDGET commands second (lower priority)
-    elif "set budget" in input_text.lower():
+    # Handle specific category budget commands with high priority
+    # Check for direct category budget commands like "set food budget" or "set transport budget"
+    input_lower = input_text.lower()
+    
+    # Match patterns like "set food budget", "create food budget", "set my food budget"
+    category_budget_match = re.search(r'(?:set|create|make|setup)\s+(?:my|a|an)?\s*(\w+)\s+budget', input_lower)
+    
+    # If not found, try to match patterns like "I want set a budget for food"
+    if not category_budget_match:
+        category_budget_match = re.search(r'(?:i\s+)?(?:want|need)(?:\s+to)?\s+set\s+a\s+budget\s+for\s+(\w+)', input_lower)
+    
+    if category_budget_match:
+        category_word = category_budget_match.group(1).strip()
+        
+        # Map the extracted category word to standard categories
+        category_map = {
+            "food": ["food", "grocery", "groceries", "dining", "restaurant", "meal", "lunch", "dinner", "breakfast"],
+            "transport": ["transport", "transportation", "bus", "train", "taxi", "car", "travel", "commute", "gas", "fuel", "drive"],
+            "entertainment": ["entertainment", "movie", "game", "fun", "show", "streaming", "netflix", "cinema"],
+            "shopping": ["shopping", "clothes", "mall", "store", "fashion", "purchase", "stuff"],
+            "utilities": ["utilities", "bill", "electric", "water", "internet", "phone", "wifi"],
+            "housing": ["housing", "rent", "mortgage", "home", "apartment", "house", "accommodation"],
+            "healthcare": ["healthcare", "health", "medical", "doctor", "hospital", "medicine", "clinic", "pharmacy"],
+            "education": ["education", "school", "book", "tuition", "learn", "course", "study", "university"],
+            "other": ["other", "misc", "miscellaneous"]
+        }
+        
+        # Determine which category the word belongs to
+        selected_category = "other"
+        for cat, keywords in category_map.items():
+            if category_word in keywords:
+                selected_category = cat
+                break
+        
+        # Clear any ongoing conversations
+        if "goal_conversation" in st.session_state:
+            del st.session_state.goal_conversation
+            
+        # Start budget conversation with the identified category
+        st.session_state.budget_conversation = {
+            "category": selected_category,
+            "stage": "ask_amount"
+        }
+        
+        return f"**{selected_category.title()} Budget** - Excellent choice!\n\nNow for the fun part! What's a realistic monthly amount you'd like to set aside for {selected_category.title()}?\n\nThink about your typical spending in this area and what feels manageable. You can always adjust it later!\n\nJust tell me the amount - like **'350'** for RM350. What sounds right to you? 🤔"
+    
+    # Handle general BUDGET commands (lower priority)
+    elif any(budget_phrase in input_text.lower() for budget_phrase in ["set budget", "set my budget", "setup budget", "create budget", "make budget", "i need to set budget", "i want to set budget", "want to set budget", "budget setup", "set a budget"]):
         # Clear any ongoing conversations  
         if "goal_conversation" in st.session_state:
             del st.session_state.goal_conversation
             
         # Start budget conversation properly
         st.session_state.budget_conversation = {"stage": "ask_category"}
+        
+        # Check for common categories in the input
+        if "food" in input_lower or "grocery" in input_lower or "groceries" in input_lower or "dining" in input_lower or "restaurant" in input_lower:
+            st.session_state.budget_conversation["category"] = "food"
+            st.session_state.budget_conversation["stage"] = "ask_amount"
+            return f"**Food Budget** - Excellent choice!\n\nNow for the fun part! What's a realistic monthly amount you'd like to set aside for Food?\n\nThink about your typical spending in this area and what feels manageable. You can always adjust it later!\n\nJust tell me the amount - like **'350'** for RM350. What sounds right to you? 🤔"
+            
+        # If no category was found, ask for category
         return "I'm so excited to help you set up a budget! 🎉 This is going to make such a difference in managing your money!\n\n**Which spending category would you like to start with?** Here are your options:\n\n🍽️ **Food** - groceries, restaurants, takeout\n\n🚗 **Transport** - gas, public transport, parking\n\n🎬 **Entertainment** - movies, games, subscriptions\n\n🛍️ **Shopping** - clothes, personal items\n\n💡 **Utilities** - electricity, water, internet, phone\n\n🏠 **Housing** - rent, mortgage payments\n\n⚕️ **Healthcare** - medical expenses, medicine\n\n📚 **Education** - books, courses, training\n\n📦 **Other** - miscellaneous expenses\n\nJust tell me which category you'd like to focus on first! I'll walk you through everything step by step. 😊"
 
    # Handle expense viewing requests with enhanced flexibility
@@ -4738,7 +4853,16 @@ def process_user_input(input_text, user_email):
         r"view\s+(\w+)\s+budget", 
         r"check\s+(\w+)\s+budget",
         r"(\w+)\s+budget\s+status",
-        r"my\s+(\w+)\s+budget"
+        r"my\s+(\w+)\s+budget",
+        r"show\s+my\s+budget\s+for\s+(\w+)",
+        r"view\s+my\s+budget\s+for\s+(\w+)",
+        r"check\s+budget\s+for\s+(\w+)",
+        r"show\s+budget\s+for\s+(\w+)",
+        r"view\s+budget\s+for\s+(\w+)",
+        r"check\s+my\s+budget\s+for\s+(\w+)",
+        r"check\s+budget\s+for\s+(\w+)",
+        r"how\s+is\s+my\s+(\w+)\s+budget",
+        r"what\s+is\s+my\s+(\w+)\s+budget"
     ]
     
     for pattern in category_budget_patterns:
@@ -4747,14 +4871,34 @@ def process_user_input(input_text, user_email):
             category = match.group(1)
             # Map common category names
             category_map = {
-                "food": "food", "grocery": "food", "dining": "food",
-                "transport": "transport", "transportation": "transport", "travel": "transport",
-                "entertainment": "entertainment", "fun": "entertainment", "movie": "entertainment",
-                "shopping": "shopping", "clothes": "shopping", "retail": "shopping",
-                "utilities": "utilities", "bills": "utilities", "utility": "utilities",
-                "housing": "housing", "rent": "housing", "home": "housing",
-                "healthcare": "healthcare", "medical": "healthcare", "health": "healthcare",
-                "education": "education", "school": "education", "learning": "education"
+                "food": "food", "grocery": "food", "dining": "food", "meal": "food", "restaurant": "food", 
+                "groceries": "food", "eating": "food", "lunch": "food", "dinner": "food", "breakfast": "food",
+                
+                "transport": "transport", "transportation": "transport", "travel": "transport", 
+                "commute": "transport", "gas": "transport", "fuel": "transport", "bus": "transport", 
+                "train": "transport", "taxi": "transport", "car": "transport", "drive": "transport",
+                
+                "entertainment": "entertainment", "fun": "entertainment", "movie": "entertainment", 
+                "cinema": "entertainment", "game": "entertainment", "streaming": "entertainment", 
+                "netflix": "entertainment", "show": "entertainment", "theatre": "entertainment",
+                
+                "shopping": "shopping", "clothes": "shopping", "retail": "shopping", "mall": "shopping",
+                "store": "shopping", "fashion": "shopping", "cloth": "shopping", "purchase": "shopping", 
+                "stuff": "shopping", "items": "shopping", "personal": "shopping",
+                
+                "utilities": "utilities", "bills": "utilities", "utility": "utilities", "electric": "utilities",
+                "water": "utilities", "internet": "utilities", "phone": "utilities", "wifi": "utilities",
+                
+                "housing": "housing", "rent": "housing", "home": "housing", "mortgage": "housing", 
+                "apartment": "housing", "house": "housing", "accommodation": "housing",
+                
+                "healthcare": "healthcare", "medical": "healthcare", "health": "healthcare", "doctor": "healthcare",
+                "hospital": "healthcare", "medicine": "healthcare", "clinic": "healthcare", "pharmacy": "healthcare",
+                
+                "education": "education", "school": "education", "learning": "education", "book": "education",
+                "tuition": "education", "course": "education", "study": "education", "university": "education",
+                
+                "other": "other", "misc": "other", "miscellaneous": "other"
             }
             
             mapped_category = category_map.get(category.lower(), category.lower())
@@ -5242,7 +5386,7 @@ elif page == "Home":
         - View expenses: *"Show my expenses this week"*
         
         **2️⃣ Budget Management**
-        - Set budgets: *"Set food budget RM500"*
+        - Set budgets: *"Set [category] budget"* to create budget for specific categories
         - Check status: *"Show my budget"* or *"Show food budget"*
         
         **3️⃣ Financial Goals**
@@ -5741,17 +5885,39 @@ elif page == "Budget Tracking":
     # Get the current user's email
     user_email = st.session_state.current_user
     
-    # Get current budgets
-    current_month = datetime.now().strftime("%B")
-    current_year = datetime.now().year
-    budgets = get_budgets(user_email, current_month, current_year)
+    # Get current date/time for default values
+    current_date = datetime.now()
+    current_month_name = current_date.strftime("%B")
+    current_month_num = current_date.month
+    current_year = current_date.year
+    
+    # Create date filters in a container at the top
+    with st.container():
+        st.subheader("Select Time Period")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Month selection
+            months = ["January", "February", "March", "April", "May", "June", 
+                      "July", "August", "September", "October", "November", "December"]
+            selected_month = st.selectbox("Month", months, index=current_month_num-1, key="budget_month_filter")
+            # Convert month name to number
+            month_num = months.index(selected_month) + 1
+        
+        with col2:
+            # Year selection (allow current year and 2 years back)
+            available_years = list(range(current_year-2, current_year+1))
+            selected_year = st.selectbox("Year", available_years, index=len(available_years)-1, key="budget_year_filter")
+    
+    # Get budgets for the selected period
+    budgets = get_budgets(user_email, selected_month, selected_year)
     
     # Show current budgets if any exist
     if budgets:
-        st.subheader("Your Current Budgets")
+        st.subheader(f"Your Budgets for {selected_month} {selected_year}")
         
         # Get spending for comparison
-        spending = get_spending_by_category(user_email, current_month, current_year)
+        spending = get_spending_by_category(user_email, month_num, selected_year)
         
         # Create a DataFrame for budget display
         budget_data = []
@@ -5802,6 +5968,8 @@ elif page == "Budget Tracking":
         # Plot the chart
         chart_data = chart_data.set_index('Category')
         st.bar_chart(chart_data)
+    else:
+        st.info(f"No budgets found for {selected_month} {selected_year}. Use the form below to set budgets for this period.")
     
     # Create a simple form to set a budget
     st.subheader("Set a New Budget")
@@ -5814,24 +5982,25 @@ elif page == "Budget Tracking":
         # Amount input
         budget_amount = st.number_input("Budget Amount (RM)", min_value=0.0, format="%.2f")
         
-        # Month selection
-        current_month_num = datetime.now().month
+        # Month selection - use the month from filter by default
         months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
-        selected_month = st.selectbox("Month", months, index=current_month_num-1)
+        form_month = st.selectbox("Month", months, index=months.index(selected_month))
         
-        # Year selection
+        # Year selection - use the year from filter by default
         current_year = datetime.now().year
-        selected_year = st.selectbox("Year", list(range(current_year-1, current_year+2)), index=1)
+        year_options = list(range(current_year-2, current_year+3))
+        default_year_index = year_options.index(selected_year) if selected_year in year_options else 2
+        form_year = st.selectbox("Year", year_options, index=default_year_index)
         
         # Submit button
         submitted = st.form_submit_button("Set Budget")
         
         if submitted:
             # Set the budget in the database
-            success = set_budget(user_email, selected_category.lower(), budget_amount, selected_month, selected_year)
+            success = set_budget(user_email, selected_category.lower(), budget_amount, form_month, form_year)
             
             if success:
-                st.success(f"Budget of RM{budget_amount:.2f} set for {selected_category} in {selected_month} {selected_year}.")
+                st.success(f"Budget of RM{budget_amount:.2f} set for {selected_category} in {form_month} {form_year}.")
                 st.rerun()  # Refresh to show the new budget
 
 elif page == "Financial Goals":
