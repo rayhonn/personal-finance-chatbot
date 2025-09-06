@@ -3061,6 +3061,124 @@ def process_budget_conversation(input_text, user_email):
     # Fallback
     return "I'm having trouble understanding your budget setup. Please try again or type 'cancel' to exit."
 
+def handle_new_goal_flow(user_input, user_email):
+    """
+    Conversational goal-setting flow:
+    1. Prompt for savings amount per month
+    2. Prompt for goal name
+    3. Prompt for timeline
+    4. Prompt for total needed amount
+    5. Calculate and respond as per A/B/C logic
+    """
+    import re
+    from datetime import datetime, timedelta
+    import math
+
+    state = st.session_state.setdefault("goal_flow", {})
+    stage = state.get("stage", "ask_savings_per_month")
+
+    # 1. Ask for savings amount per month
+    if stage == "ask_savings_per_month":
+        # Display confirmation + show income
+        income = get_user_income(user_email)
+        state["stage"] = "get_savings_per_month"
+        state["income"] = income
+        return f"🎯 Would you like to set a savings goal?\n\n💰 **Your monthly income:** RM{income:.2f}\n\nHow much do you want to save per month? (e.g., RM300, RM500)"
+
+    if stage == "get_savings_per_month":
+        amount_match = re.search(r"(\d{1,6}(?:\.\d{1,2})?)", user_input.replace(',', ''))
+        if not amount_match:
+            return "Please enter a valid monthly savings amount (e.g., RM300, RM500)."
+        per_month = float(amount_match.group(1))
+        state["monthly_savings"] = per_month
+        state["stage"] = "ask_goal_name"
+        return "🏷️ What's the name of your goal? (e.g., New Laptop, Vacation Fund)"
+
+    if stage == "ask_goal_name":
+        state["goal_name"] = user_input.strip().title()
+        state["stage"] = "ask_timeline"
+        return "⏳ Choose your goal timeline: 6 months, 1 year, or 2 years."
+
+    if stage == "ask_timeline":
+        # Accept 6 months, 1 year, 2 years, or custom
+        m = re.search(r"(\d+)\s*(month|year)", user_input)
+        if m:
+            num = int(m.group(1))
+            if "year" in m.group(2):
+                months = num * 12
+            else:
+                months = num
+        elif "6" in user_input:
+            months = 6
+        elif "1" in user_input and "year" in user_input:
+            months = 12
+        elif "2" in user_input and "year" in user_input:
+            months = 24
+        else:
+            return "Please specify a timeline: 6 months, 1 year, or 2 years."
+        state["timeline_months"] = months
+        state["stage"] = "ask_goal_amount"
+        return "💰 How much do you need for your goal? (e.g., RM2400)"
+
+    if stage == "ask_goal_amount":
+        amount_match = re.search(r"(\d{1,7}(?:\.\d{1,2})?)", user_input.replace(',', ''))
+        if not amount_match:
+            return "Please enter the total amount you want to save for your goal (e.g., RM2400)."
+        goal_amount = float(amount_match.group(1))
+        state["goal_amount"] = goal_amount
+
+        # Get expenses for net savings
+        expenses = get_expenses(user_email)
+        if not expenses:
+            st.session_state.goal_flow = None
+            return "I couldn't find your recent expenses to calculate net savings. Please record your expenses for at least one month before setting a goal!"
+
+        # Calculate monthly expenses
+        months_exp = {}
+        for exp in expenses:
+            month = exp['date'][:7]
+            months_exp.setdefault(month, 0)
+            months_exp[month] += exp['amount']
+        last_months = sorted(months_exp.keys(), reverse=True)[:3]
+        avg_exp = sum(months_exp[m] for m in last_months) / len(last_months)
+
+        income = state.get("income")
+        net_savings = income - avg_exp
+        required_monthly = goal_amount / state["timeline_months"]
+        estimated_months = math.ceil(goal_amount / net_savings) if net_savings > 0 else None
+
+        # Save to state for possible followup
+        state["net_savings"] = net_savings
+        state["required_monthly"] = required_monthly
+        state["estimated_months"] = estimated_months
+
+        # Respond with logic (A/B/C)
+        if net_savings >= required_monthly:
+            # Case A: Achievable
+            st.session_state.goal_flow = None
+            return (
+                f"🎉 If you save **RM{required_monthly:.2f} per month**, you can achieve your \"{state['goal_name']}\" goal in {state['timeline_months']} months! 🚀\n"
+                f"Your net savings is **RM{net_savings:.2f}/month**."
+            )
+        elif net_savings < required_monthly:
+            # Case B: Not achievable, suggest extending
+            st.session_state.goal_flow = None
+            return (
+                f"⚠️ To achieve your goal in {state['timeline_months']} months, you need to save **RM{required_monthly:.2f}/month**.\n"
+                f"But your net savings is only **RM{net_savings:.2f}/month**.\n"
+                "Consider extending your timeline or increasing monthly savings for a realistic plan! 😊"
+            )
+        elif net_savings > required_monthly:
+            # Case C: Faster
+            st.session_state.goal_flow = None
+            return (
+                f"⚡ With your net savings of **RM{net_savings:.2f}/month**, you could achieve your RM{goal_amount:.2f} goal in just **{estimated_months} months** instead of {state['timeline_months']}! 🏆"
+            )
+
+    # Fallback
+    st.session_state.goal_flow = None
+    return "Sorry, something went wrong in the goal setup. Want to try again?"
+
 # Function to process user input with yes/no handling for category confirmation
 def process_user_input(input_text, user_email):
     """
@@ -3069,6 +3187,85 @@ def process_user_input(input_text, user_email):
 
     input_text = input_text.strip()
     input_lower = input_text.lower()
+
+            # --- NEW GOAL FLOW HANDLER: HIGH PRIORITY ---
+    if st.session_state.get("goal_flow"):
+        return handle_new_goal_flow(input_text, user_email)
+
+    if input_lower in ["set a goal", "i want to set goal", "create goal", "new goal", "add goal"]:
+        st.session_state["goal_flow"] = {"stage": "ask_savings_per_month"}
+        return handle_new_goal_flow("", user_email)
+
+    set_income_phrases = [
+        "set my income", "set income", "i want to set income", "set my salary", "set salary", "i want to set salary"
+    ]
+
+    if not has_income_set(user_email):
+    # 1. Free-form income setting (user types "my income is 3000", etc)
+        income_pattern = re.search(
+            r"(?:my income is|i earn|set income(?: to)?|my monthly income is|income is)\s*(?:rm)?\s*([0-9,]+)",
+            input_lower
+        )
+        if income_pattern:
+            income_amount = float(income_pattern.group(1).replace(',', ''))
+            st.session_state["pending_income_amount"] = income_amount
+            st.session_state["pending_income_confirm"] = True
+            return f"Sure! I have received your income is RM{income_amount:.2f}. Is that correct? (yes/no)"
+
+    # 2. "Show my income" queries (must show 'No Income Setting Found' message)
+        income_view_patterns = [
+            "show my income", "view income", "view my income", "check income", 
+            "what is my income", "what's my income", "my income", "income setting",
+            "see my income", "display income", "current income", "monthly income"
+        ]
+        if any(pattern in input_lower for pattern in income_view_patterns):
+            return get_income_response(user_email)  # <-- This shows the long "No Income Setting Found" message
+
+    # 3. Only THEN, fallback to set income if user says "set income", "update income", "income", etc
+        if any(cmd in input_lower for cmd in ["set my income", "set income", "update income", "income", "salary"]):
+            st.session_state["pending_income_setting"] = True
+            return "How much income you want to set?"
+        
+    if has_income_set(user_email) and any(phrase in input_lower for phrase in set_income_phrases):
+        current_income = get_user_income(user_email)
+        return (
+            f"💡 You already have an income set. Your income is **RM{current_income:.2f}**.\n\n"
+            "If you want to update, just type **'update income'**.\n"
+            "To view your income, type **'show my income'**.\n"
+            "Or, create goals for your financial planning by saying **'create goals'**!\n"
+        )
+
+        # --- PENDING INCOME SETTING FLOW ---
+    if st.session_state.get("pending_income_setting"):
+        # Step 2: User gives a number
+        amount_match = re.search(r"(\d+(?:\.\d+)?)", input_text.replace(',', ''))
+        if amount_match:
+            st.session_state["pending_income_amount"] = float(amount_match.group(1))
+            st.session_state["pending_income_setting"] = False
+            st.session_state["pending_income_confirm"] = True
+            return f"Now you want to set income is RM{float(amount_match.group(1)):.0f}, confirm type 'yes' or want to make changes type 'no'?"
+        else:
+            return "How much income you want to set? Please enter the amount (e.g., RM3000 or 3000)."
+
+    if st.session_state.get("pending_income_confirm"):
+        if input_lower in ["yes", "y", "confirm", "ok"]:
+            new_income = st.session_state["pending_income_amount"]
+            set_user_income(user_email, new_income)
+            # Reset pending states
+            st.session_state["pending_income_confirm"] = False
+            st.session_state["pending_income_amount"] = None
+            return ("Alright, Your income have been saved successfully recorded! "
+                    "You may type 'show my income' to view, 'update income' to update new income or 'create goals' "
+                    "to have a good planning financial goals!")
+        elif input_lower in ["no", "n"]:
+            st.session_state["pending_income_confirm"] = False
+            st.session_state["pending_income_setting"] = True
+            return "Sure, now how much of your income? Just give a new amount"
+        else:
+            return "Please type 'yes' to confirm or 'no' to edit the amount."
+
+    # --- INCOME SETTING TRIGGER (no income yet) ---
+
 
     # --- INTERRUPT GOAL CREATION IF USER TYPES OTHER COMMANDS ---
     if st.session_state.get("goal_creation_stage"):
