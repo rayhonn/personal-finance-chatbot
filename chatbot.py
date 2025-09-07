@@ -3039,7 +3039,7 @@ def process_budget_conversation(input_text, user_email):
         
         conv["year"] = year
         conv["stage"] = "confirm"
-        return (f"Please confirm: Budget **RM{conv['amount']:.2f}** for **{conv['category'].title()}** in **{conv['month']} {year}**.\n"
+        return (f"Please confirm: Budget **RM{conv['amount']:.2f}** for **{conv['category'].title()}** in **{conv['month']} {year}**.\n\n"
                 "Type 'yes' to confirm or type 'change' to revise.")
 
     # Enhanced Revision Flow
@@ -3308,7 +3308,7 @@ def process_user_input(input_text, user_email):
                 "amount": amount
             }
             return (
-                f"💸 Did you want to add **RM{amount:.2f}** to your goal '**{goal['goal_name']}**'?\n"
+                f"💸 Did you want to add **RM{amount:.2f}** to your goal '**{goal['goal_name']}**'?\n\n"
                 f"(Type 'yes' to confirm, or say 'change' to update the amount or goal name.)"
             )
         else:
@@ -3372,8 +3372,8 @@ def process_user_input(input_text, user_email):
             st.session_state['awaiting_goal_change'] = True  # <-- set a flag
             return (
                 "🔄 No problem! What would you like to change?\n\n"
-                "• Type the **new amount** (e.g., 'RM100' or '100')\n"
-                "• Or type the **new goal name** (e.g., 'New Laptop 2')\n"
+                "• Type the **new amount** (e.g., 'RM100' or '100')\n\n"
+                "• Or type the **new goal name** (e.g., 'New Laptop 2')\n\n"
                 "• Or type both, e.g., 'RM200 to New Laptop 2'\n\n"
                 "What would you like to update?"
             )
