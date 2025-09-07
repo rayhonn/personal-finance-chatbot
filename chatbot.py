@@ -3480,7 +3480,7 @@ def process_user_input(input_text, user_email):
     # 2. "Show my income" queries (must show 'No Income Setting Found' message)
         income_view_patterns = [
             "show my income", "view income", "view my income", "check income", 
-            "what is my income", "what's my income", "my income", "income setting",
+            "what is my income", "what's my income", "income setting",
             "see my income", "display income", "current income", "monthly income"
         ]
         if any(pattern in input_lower for pattern in income_view_patterns):
@@ -3797,7 +3797,7 @@ def process_user_input(input_text, user_email):
             new_income = float(amount_match.group(1))
             st.session_state.pending_income_amount = new_income
             return (f"📝 You entered RM{new_income:.2f} as your new monthly income.\n\n"
-                    "Do you want to confirm this amount, or change it again? (Reply 'yes' to confirm, or enter a new amount.)")
+                    "Do you want to confirm this amount, or change it again? \n\n(Reply 'yes' to confirm, or enter a new amount.)")
         # Otherwise, prompt again
         return ("Please reply 'yes' to confirm your new income, or enter a different amount to change it.")
 
